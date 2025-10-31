@@ -1,16 +1,21 @@
-import logo from "../assets/BethesdaLogo.png";
+import bethesdaLogo from "../assets/BethesdaLogoWhite.png";
 
 
-export default function Footer() {
-return (
-<footer className="bg-bethLightGray text-white mt-10 p-6 flex flex-col md:flex-row justify-between items-center gap-6">
-    <div className="flex items-center gap-4">
-        <img src={logo} alt="Bethesda Logo" className="h-16 object-contain" />
-    </div>
-    <div className="text-center md:text-right text-bethDeepBlue text-sm leading-6">
-        <p>3280 Schmon Parkway<br />Thorold, ON, L2V 4Y6</p>
-        <p className="mt-2">E: info@bethesdaservices.com<br />T: 905.684.6918</p>
-    </div>
-</footer>
-);
+export function Footer() {
+    return (
+        <footer className="bg-bethDeepBlue text-white flex flex-row items-center justify-between h-full px-4">
+            <div className="flex-shrink-0">
+                <img src={bethesdaLogo} alt="Bethesda Logo" className="h-14 hover:opacity-90 transition" />
+            </div>
+            <div className="flex flex-col text-center ">
+                <p className="text-sm">3280 Schmon Parkway, Thorold, ON, L2V 4Y6</p>
+                <p className="text-sm">
+                    <a href="mailto:info@bethesdaservices.com" className="hover:text-bethLightBlue underline">info@bethesdaservices.com</a>
+                </p>
+                <p>
+                    <a href="tel:9056846918" className="hover:text-bethLightBlue underline">905.684.6918</a>
+                </p>
+            </div>
+        </footer>
+    );
 }

@@ -8,8 +8,12 @@ export default function ItemDetails() {
   if (!item) return <div className="p-6 text-center">Item not found.</div>;
 
   return (
-    <div className="max-w-md mx-auto bg-bethLightGray shadow p-6 rounded mt-6">
-      <img src={item.image} alt={item.name} className="w-48 h-48 object-cover rounded mx-auto mb-4" />
+    <div className="max-w-xl mx-auto bg-bethLightGray shadow p-10 rounded mt-6 mb-6">
+      <div className="w-full h-64 overflow-hidden rounded mb-6">
+        {/* <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> */}
+        <img src={item.image} alt={item.name} className="w-full h-64 object-cover mb-6" />
+      </div>
+
       <h2 className="text-2xl font-bold text-bethDeepBlue text-center mb-2">{item.name}</h2>
       <p className="text-center text-sm text-gray-500 mb-4">Status: {item.status}</p>
       <div className="flex justify-center gap-4">

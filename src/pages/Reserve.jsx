@@ -1,4 +1,4 @@
-// 4. Reserve.jsx
+// Reserve.jsx
 import { useLocation } from 'react-router-dom';
 import { useState } from 'react';
 
@@ -22,7 +22,7 @@ export default function Reserve() {
 
 
   return (
-    <div className="max-w-md mx-auto bg-bethLightGray shadow p-6 rounded">
+    <div className="max-w-md mx-auto bg-bethLightGray shadow p-6 rounded mt-6">
       <h2 className="text-2xl font-bold mb-4 text-bethDeepBlue">Reserve Item</h2>
       <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
         <input name="name" value={formData.name} onChange={handleChange} placeholder="Your Name" required className="border p-2 rounded" />
