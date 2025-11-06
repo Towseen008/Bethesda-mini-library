@@ -8,7 +8,7 @@ const items = [
         status: "Available",
         image: "https://picsum.photos/150?random=1"
     },
-        {
+    {
         id: 2,
         name: "Puzzle Board [10B]",
         type: "Toys",
@@ -42,8 +42,7 @@ const items = [
         type: "Games",
         status: "Available",
         image: "https://picsum.photos/150?random=6"
-    }
-    ,
+    } ,
     {
         id: 7,
         name: "Bike [8B]",
@@ -129,6 +128,5 @@ const items = [
         image: "https://picsum.photos/150?random=18"
     }
 ];
-
 
 export default items;

@@ -1,22 +1,54 @@
 // Home.jsx (with pagination)
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import items from '../data/data';
+// import items from '../data/data';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+// console.log("Firestore connected:", db);
 
 export default function Home() {
+        
     const itemsPerPage = 9;
+    const [items, setItems] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
+    const [loading, setLoading] = useState(true);
 
+    // Fetch data from Firestore
+    useEffect(() => {
+        const fetchData = async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, "items"));
+            const fetchedItems = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            }));
+            setItems(fetchedItems);
+        } catch (error) {
+            console.error("Error fetching items: ", error);
+        } finally {
+            setLoading(false);
+        }
+        };
+
+        fetchData();
+    }, []);
 
     const totalPages = Math.ceil(items.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const currentItems = items.slice(startIndex, startIndex + itemsPerPage);
 
-
     const handlePageChange = (page) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: "smooth" });
     };
+
+    if (loading) {
+        return (
+        <div className="flex items-center justify-center h-[80vh] text-lg font-medium">
+            Loading items...
+        </div>
+        );
+  }
 
     return (
         <div className="max-w-6xl m-auto py-6 px-4 space-y-6">
@@ -34,7 +66,7 @@ export default function Home() {
                 </p>
             </div>
 
-            <h2 className="text-2xl font-bold mb-4 text-bethDeepBlue">Available Toys & Books</h2>
+            <h2 className="text-2xl font-bold mb-4 text-bethDeepBlue border-b pb-2">Available Toys & Books</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {currentItems.map(item => (
                     <Link
