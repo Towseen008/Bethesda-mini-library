@@ -18,8 +18,8 @@ export default function App() {
         <main className="flex-1 h-[75vh] overflow-y-auto p-4">
           <Routes>
             <Route path='/' element={<Home />} />
-            <Route path='/reserve' element={<Reserve />} />
             <Route path='/item/:id' element={<ItemDetails />} />
+            <Route path='/reserve/:id' element={<Reserve />} /> {/* <-- add :id */}
             <Route path='/admin' element={<Admin />} />
           </Routes>
         </main>
