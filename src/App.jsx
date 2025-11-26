@@ -1,31 +1,44 @@
 // App.jsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
-import {Footer} from './components/Footer';
+import { Footer } from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
+import PageTransition from './components/PageTransition';
+
 import Home from './pages/Home';
 import Reserve from './pages/Reserve';
 import ItemDetails from './pages/ItemDetails';
 import Admin from './pages/Admin';
-
+import AboutUs from './pages/About';
 
 export default function App() {
   return (
     <Router>
+      <ScrollToTop />
+
       <div className="flex flex-col min-h-screen overflow-x-hidden">
-        <header className="h-[10vh] flex-shrink-0">
+        
+        {/* Header */}
+        <header className="flex-shrink-0">
           <Header />
         </header>
-        <main className="flex-1 h-[75vh] overflow-y-auto p-4">
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto p-4">
           <Routes>
-            <Route path='/' element={<Home />} />
-            <Route path='/item/:id' element={<ItemDetails />} />
-            <Route path='/reserve/:id' element={<Reserve />} /> {/* <-- add :id */}
-            <Route path='/admin' element={<Admin />} />
+            <Route path="/" element={<PageTransition><Home /></PageTransition>} />
+            <Route path="/item/:id" element={<PageTransition><ItemDetails /></PageTransition>} />
+            <Route path="/reserve/:id" element={<PageTransition><Reserve /></PageTransition>} />
+            <Route path="/about" element={<PageTransition><AboutUs /></PageTransition>} />
+            <Route path="/admin" element={<PageTransition><Admin /></PageTransition>} />
           </Routes>
         </main>
-        <footer className="h-[15vh] flex-shrink-0">
+
+        {/* Footer */}
+        <footer className="flex-shrink-0">
           <Footer />
         </footer>
+
       </div>
     </Router>
   );
