@@ -159,10 +159,11 @@ export default function Home() {
           <option value="all">Filter Toys</option>
 
           <optgroup label="Age Groups">
-            <option value="age:2-5">2–5 years</option>
-            <option value="age:2-10">2–10 years</option>
-            <option value="age:6-10">6–10 years</option>
-            <option value="age:9+">9+ years</option>
+                <option value="All Age">All Age</option>
+                <option value="2 to 5">2-5 years</option>
+                <option value="2 to 10">2-10 years</option>
+                <option value="6 to 10">6–10 years</option>
+                <option value="9+">9+ years</option>
           </optgroup>
 
           <optgroup label="Availability">

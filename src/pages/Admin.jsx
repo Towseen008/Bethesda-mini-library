@@ -448,9 +448,10 @@ export default function Admin() {
         <div className="bg-white shadow p-4 rounded border-l-4 border-red-600">
           <h4 className="text-sm text-gray-600">Items On Loan</h4>
           <p className="text-2xl font-bold text-red-700">
-            {items.filter(item => (item.quantity ?? 0) === 0).length}
+            {items.reduce((sum, item) => sum + ((item.totalQuantity ?? 0) - (item.quantity ?? 0)), 0)}
           </p>
         </div>
+
 
         {/* Pending Reservations */}
         <div className="bg-white shadow p-4 rounded border-l-4 border-yellow-500">
@@ -591,11 +592,11 @@ export default function Admin() {
               className="p-2 border rounded"
             >
               <option value="">Select Age Group</option>
-              <option value="All Age">All Age</option>
-              <option value="2-5">2–5 years</option>
-              <option value="2-10">2–10 years</option>
-              <option value="6-10">6–10 years</option>
-              <option value="9+">9+ years</option>
+                <option value="All Age">All Age</option>
+                <option value="2 to 5">2-5 years</option>
+                <option value="2 to 10">2-10 years</option>
+                <option value="6 to 10">6–10 years</option>
+                <option value="9+">9+ years</option>
             </select>
 
             <select
@@ -982,9 +983,9 @@ export default function Admin() {
               >
                 <option value="">Select Age Group</option>
                 <option value="All Age">All Age</option>
-                <option value="2-5">2-5 years</option>
-                <option value="2-10">2-10 years</option>
-                <option value="6-10">6–10 years</option>
+                <option value="2 to 5">2-5 years</option>
+                <option value="2 to 10">2-10 years</option>
+                <option value="6 to 10">6–10 years</option>
                 <option value="9+">9+ years</option>
               </select>
 
