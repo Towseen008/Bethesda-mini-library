@@ -14,15 +14,20 @@ export default function ItemDetails() {
   useEffect(() => {
     const fetchItem = async () => {
       try {
-        const docRef = doc(db, "items", id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setItem(docSnap.data());
-        } else {
-          console.log("No such document!");
+        const ref = doc(db, "items", id);
+        const snap = await getDoc(ref);
+
+        if (snap.exists()) {
+          const data = snap.data();
+
+          // Convert Pending → Available for parents
+          const adjustedStatus =
+            data.status === "Pending" ? "Available" : data.status;
+
+          setItem({ ...data, status: adjustedStatus });
         }
-      } catch (error) {
-        console.error("Error fetching item:", error);
+      } catch (err) {
+        console.error("Error fetching item:", err);
       } finally {
         setLoading(false);
       }
@@ -33,33 +38,36 @@ export default function ItemDetails() {
 
   const handlePrevImage = () => {
     setCurrentImageIndex((prev) =>
-      prev === 0 ? (item.images?.length || 1) - 1 : prev - 1
+      prev === 0 ? images.length - 1 : prev - 1
     );
   };
 
   const handleNextImage = () => {
     setCurrentImageIndex((prev) =>
-      prev === (item.images?.length || 1) - 1 ? 0 : prev + 1
+      prev === images.length - 1 ? 0 : prev + 1
     );
   };
 
   if (loading)
     return (
-      <p className="text-center py-8 text-gray-500">
+      <div className="text-center py-8">
         <Spinner />
-      </p>
+      </div>
     );
 
   if (!item)
-    return <p className="text-center py-8 text-red-500">Item not found.</p>;
+    return <p className="text-center text-red-500">Item not found.</p>;
 
-  const images = item.images && item.images.length > 0 ? item.images : [item.image];
+  const isOnLoan = item.status === "On Loan";
+  const isAvailable = item.status === "Available";
+
+  const images = item.images?.length ? item.images : [item.image];
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 py-6">
-      <div className="bg-white shadow-lg rounded-lg overflow-hidden w-full max-w-3xl mx-auto">
+    <div className="flex flex-col items-center min-h-[80vh] px-4 py-6">
+      <div className="bg-white shadow-lg rounded-lg w-full max-w-3xl mx-auto">
 
-        {/* Image Carousel */}
+        {/* IMAGE CAROUSEL */}
         <div className="w-full h-auto sm:h-[500px] bg-gray-100 flex items-center justify-center relative">
           <img
             src={images[currentImageIndex]}
@@ -71,13 +79,13 @@ export default function ItemDetails() {
             <>
               <button
                 onClick={handlePrevImage}
-                className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-40 text-white px-3 py-1 rounded"
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-40 text-white px-3 py-1 rounded"
               >
                 &#10094;
               </button>
               <button
                 onClick={handleNextImage}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-40 text-white px-3 py-1 rounded"
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-40 text-white px-3 py-1 rounded"
               >
                 &#10095;
               </button>
@@ -85,77 +93,67 @@ export default function ItemDetails() {
           )}
         </div>
 
-        {/* Details Section */}
-        <div className="p-6 space-y-3 text-center sm:text-left">
+        {/* DETAILS */}
+        <div className="p-6 space-y-3">
           <h2 className="text-3xl font-bold text-bethDeepBlue">{item.name}</h2>
 
-          <div className="text-sm sm:text-base text-gray-600 space-y-1">
-            <p>
-              <span className="font-semibold text-bethDeepBlue">Category:</span>{" "}
-              {item.category || "N/A"}
-            </p>
-            <p>
-              <span className="font-semibold text-bethDeepBlue">Age Group:</span>{" "}
-              {item.ageGroup || "N/A"}
-            </p>
-            <p>
-              <span className="font-semibold text-bethDeepBlue">Status:</span>{" "}
-              {item.status || "N/A"}
-            </p>
-            <p>
-              <span className="font-semibold text-bethDeepBlue">Description:</span>{" "}
-              {item.description || "N/A"}
-            </p>
-          </div>
+          <p><span className="font-semibold">Category:</span> {item.category}</p>
+          <p><span className="font-semibold">Age Group:</span> {item.ageGroup}</p>
 
-          {/* BUTTONS SECTION */}
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
+          <p>
+            <span className="font-semibold">Status:</span>{" "}
+            <span
+              className={
+                isOnLoan ? "text-red-600 font-bold" : "text-green-600 font-bold"
+              }
+            >
+              {item.status}
+            </span>
+          </p>
 
-            {/* RESERVE BUTTON + TOOLTIP */}
-            <div className="relative group flex justify-center sm:justify-start">
+          <p>
+            <span className="font-semibold">Description:</span>{" "}
+            {item.description}
+          </p>
+
+          {/* BUTTONS */}
+          <div className="mt-6 flex flex-col sm:flex-row gap-3">
+
+            {/* Reserve Button */}
+            {isAvailable && (
               <Link
-                to={item.status === "Available" ? `/reserve/${id}` : "#"}
-                onClick={(e) => {
-                  if (item.status === "Pending" || item.status === "On Loan") {
-                    e.preventDefault();
-                  }
-                }}
-                className={`px-5 py-2 rounded transition text-white 
-                  ${
-                    item.status === "Available"
-                      ? "bg-bethDeepBlue hover:bg-bethLightBlue"
-                      : "bg-gray-400 cursor-not-allowed"
-                  }
-                `}
+                to={`/reserve/${id}`}
+                className="px-5 py-2 bg-bethDeepBlue hover:bg-bethLightBlue text-white rounded"
               >
-                {item.status === "Available" ? "Reserve This Toy" : "Not Available"}
+                Reserve This Toy
               </Link>
+            )}
 
-              {/* TOOLTIP */}
-              {(item.status === "Pending" || item.status === "On Loan") && (
-                <div
-                  className="
-                    absolute -top-10 left-1/2 -translate-x-1/2 
-                    bg-black text-white text-xs px-3 py-1 rounded 
-                    opacity-0 group-hover:opacity-100 transition 
-                    pointer-events-none whitespace-nowrap
-                  "
-                >
-                  {item.status === "On Loan"
-                    ? "This toy is currently on loan"
-                    : "This toy is currently pending"}
-                </div>
-              )}
-            </div>
+            {/* Waitlist Button */}
+            {isOnLoan && (
+              <Link
+                to={`/reserve/${id}`}
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
+              >
+                Join Waitlist
+              </Link>
+            )}
 
-            {/* BACK BUTTON */}
+            {/* BACK */}
             <Link
               to="/"
-              className="border border-bethDeepBlue text-bethDeepBlue px-5 py-2 rounded hover:bg-gray-100 transition"
+              className="border border-bethDeepBlue text-bethDeepBlue px-5 py-2 rounded hover:bg-gray-100"
             >
               Back to Home
             </Link>
           </div>
+
+          {/* WAITLIST NOTE */}
+          {isOnLoan && (
+            <p className="text-xs mt-2 text-gray-600 italic">
+              * Joining waitlist requires final approval by Admin.
+            </p>
+          )}
         </div>
       </div>
     </div>

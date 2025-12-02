@@ -19,7 +19,7 @@ export default function Home() {
   const itemsPerPage = 9;
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch items
+  /* ---------- Fetch items ---------- */
   useEffect(() => {
     const fetchItems = async () => {
       try {
@@ -28,6 +28,7 @@ export default function Home() {
           id: doc.id,
           ...doc.data(),
         }));
+
         setItems(itemsData);
         setFilteredItems(itemsData);
       } catch (error) {
@@ -36,13 +37,21 @@ export default function Home() {
         setLoading(false);
       }
     };
+
     fetchItems();
   }, []);
 
-  // Filtering + Sorting
+  /* ---------- Filtering & Search ---------- */
   useEffect(() => {
     let updated = [...items];
 
+    // Treat Pending as Available for parents
+    updated = updated.map((i) => ({
+      ...i,
+      status: i.status === "Pending" ? "Available" : i.status
+    }));
+
+    // Text search
     if (searchTerm) {
       updated = updated.filter((item) =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -60,7 +69,15 @@ export default function Home() {
     }
 
     if (filterType === "status") {
-      updated = updated.filter((i) => i.status === filterValue);
+      if (filterValue === "Available") {
+        // Available includes Pending (treated as Available)
+        updated = updated.filter(
+          (i) => i.status === "Available"
+        );
+      } else {
+        // On Loan should filter normally
+        updated = updated.filter((i) => i.status === filterValue);
+      }
     }
 
     if (filterType === "sort") {
@@ -79,17 +96,21 @@ export default function Home() {
     setCurrentPage(1);
   }, [filterOption, searchTerm, items]);
 
-  // Pagination Logic
+  /* ---------- Pagination ---------- */
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    const element = document.getElementById("available-toys");
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
-  // Loading Skeletons
+  /* ---------- Loading Skeleton ---------- */
   if (loading)
     return (
       <div className="max-w-6xl mx-auto px-4 py-6">
@@ -104,7 +125,7 @@ export default function Home() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-4 space-y-6">
 
-      {/* HERO SECTION WITH PARALLAX */}
+      {/* HERO SECTION */}
       <div
         className="relative w-full h-[60vh] sm:h-[70vh] lg:h-[80vh] parallax-bg flex items-center justify-center"
         style={{ backgroundImage: `url(${heroImage})` }}
@@ -112,16 +133,12 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/50"></div>
 
         <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-3xl">
-
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 opacity-0 animate-heroFloat delay-[150ms] leading-tight">
             Welcome To The Toy Lending Library
           </h2>
 
           <p className="text-sm sm:text-lg lg:text-xl text-gray-200 mb-6 opacity-0 animate-heroFloat delay-[350ms] leading-relaxed">
-            Discover an engaging collection of educational toys designed to
-            support developmental growth and learning. Browse available items,
-            reserve them, and get notified when your resources are ready for
-            pickup.
+            Discover educational toys, reserve what you need, and join the waitlist for items currently on loan.
           </p>
 
           <a
@@ -133,10 +150,10 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Section Title */}
+      {/* SECTION TITLE */}
       <h2
         id="available-toys"
-        className="text-2xl font-bold mb-4 text-bethDeepBlue border-b pb-2"
+        className="text-2xl font-bold mb-4 text-bethDeepBlue border-b pb-2 scroll-mt-24"
       >
         Available Toys
       </h2>
@@ -159,16 +176,15 @@ export default function Home() {
           <option value="all">Filter Toys</option>
 
           <optgroup label="Age Groups">
-                <option value="All Age">All Age</option>
-                <option value="2 to 5">2-5 years</option>
-                <option value="2 to 10">2-10 years</option>
-                <option value="6 to 10">6–10 years</option>
-                <option value="9+">9+ years</option>
+            <option value="age:All Age">All Age</option>
+            <option value="age:2 to 5">2–5 years</option>
+            <option value="age:2 to 10">2–10 years</option>
+            <option value="age:6 to 10">6–10 years</option>
+            <option value="age:9+">9+ years</option>
           </optgroup>
 
           <optgroup label="Availability">
             <option value="status:Available">Available</option>
-            <option value="status:Pending">Pending</option>
             <option value="status:On Loan">On Loan</option>
           </optgroup>
 
@@ -193,7 +209,7 @@ export default function Home() {
         </select>
       </div>
 
-      {/* ITEMS GRID WITH ANIMATIONS */}
+      {/* ITEMS GRID */}
       {filteredItems.length === 0 ? (
         <p className="text-center text-gray-500">No toys match your filters.</p>
       ) : (
@@ -215,6 +231,7 @@ export default function Home() {
                 <h3 className="text-lg font-semibold text-bethDeepBlue mb-2">
                   {item.name}
                 </h3>
+
                 <p className="text-sm text-gray-600 mb-2">
                   Age Group: {item.ageGroup || "N/A"}
                 </p>
@@ -223,8 +240,6 @@ export default function Home() {
                   className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                     item.status === "Available"
                       ? "bg-green-200 text-green-800"
-                      : item.status === "Pending"
-                      ? "bg-yellow-200 text-yellow-800"
                       : "bg-red-200 text-red-800"
                   }`}
                 >

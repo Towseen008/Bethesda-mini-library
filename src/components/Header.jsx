@@ -39,6 +39,14 @@ export default function Header() {
             Home
           </Link>
 
+          <Link
+            to="/admin"
+            onClick={closeAll}
+            className="text-white hover:text-bethLightBlue"
+          >
+            Admin
+          </Link>
+
           {/* ABOUT US DROPDOWN */}
           <div className="relative">
             <button

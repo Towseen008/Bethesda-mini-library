@@ -10,6 +10,7 @@ import Reserve from './pages/Reserve';
 import ItemDetails from './pages/ItemDetails';
 import Admin from './pages/Admin';
 import AboutUs from './pages/About';
+import Confirmation from './pages/Confirmation';
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/reserve/:id" element={<PageTransition><Reserve /></PageTransition>} />
             <Route path="/about" element={<PageTransition><AboutUs /></PageTransition>} />
             <Route path="/admin" element={<PageTransition><Admin /></PageTransition>} />
+            <Route path="/confirmation" element={<Confirmation />} />
           </Routes>
         </main>
 
