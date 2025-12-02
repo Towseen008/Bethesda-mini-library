@@ -1,6 +1,5 @@
 // src/components/admin/ToyForm.jsx
 
-import ImagePreviewList from "./ImagePreviewList";
 import {
   CATEGORY_OPTIONS,
   AGE_GROUP_OPTIONS,
@@ -17,104 +16,168 @@ export default function ToyForm({
   onRemoveImage,
 }) {
   return (
-    <form onSubmit={onSubmit} className="bg-white shadow p-4 rounded space-y-3">
-      <h3 className="font-bold text-lg text-bethDeepBlue">{title}</h3>
+    <form onSubmit={onSubmit} className="bg-white shadow p-6 rounded-lg space-y-6">
 
-      <input
-        type="text"
-        name="name"
-        value={formData.name}
-        onChange={onChange}
-        placeholder="Toy Name"
-        className="w-full border p-2 rounded"
-        required
-      />
+      {/* TITLE */}
+      <h3 className="text-2xl font-bold text-bethDeepBlue border-b pb-2">
+        {title}
+      </h3>
 
-      {/* Images */}
+      {/* NAME + CATEGORY */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Toy Name */}
+        <div>
+          <label className="font-semibold text-sm">Toy Name</label>
+          <input
+            name="name"
+            required
+            value={formData.name}
+            onChange={onChange}
+            className="border p-2 rounded w-full"
+            placeholder="Enter toy name"
+          />
+        </div>
+
+        {/* Category */}
+        <div>
+          <label className="font-semibold text-sm">Category</label>
+          <select
+            name="category"
+            required
+            value={formData.category}
+            onChange={onChange}
+            className="border p-2 rounded w-full"
+          >
+            <option value="">Select category</option>
+            {CATEGORY_OPTIONS.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* AGE GROUP */}
       <div>
-        <label className="font-semibold">Upload Images</label>
+        <label className="font-semibold text-sm">Age Group</label>
+        <select
+          name="ageGroup"
+          value={formData.ageGroup}
+          onChange={onChange}
+          className="border p-2 rounded w-full"
+        >
+          <option value="">Select age group</option>
+          {AGE_GROUP_OPTIONS.map((a) => (
+            <option key={a}>{a}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* DESCRIPTION */}
+      <div>
+        <label className="font-semibold text-sm">Description</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={onChange}
+          placeholder="Describe the toy..."
+          className="border p-2 rounded w-full h-24"
+        />
+      </div>
+
+      {/* INVENTORY FIELDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Status */}
+        <div>
+          <label className="font-semibold text-sm">Status</label>
+          <select
+            name="status"
+            value={formData.status}
+            onChange={onChange}
+            className="border p-2 rounded w-full"
+          >
+            {ITEM_STATUS_OPTIONS.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Available Quantity */}
+        <div>
+          <label className="font-semibold text-sm">Available</label>
+          <input
+            type="number"
+            min="0"
+            name="quantity"
+            value={formData.quantity}
+            onChange={onChange}
+            className="border p-2 rounded w-full"
+            placeholder="Available copies"
+          />
+        </div>
+
+        {/* Total Quantity */}
+        <div>
+          <label className="font-semibold text-sm">Total Inventory</label>
+          <input
+            type="number"
+            min="1"
+            name="totalQuantity"
+            value={formData.totalQuantity}
+            onChange={onChange}
+            className="border p-2 rounded w-full"
+            placeholder="Total copies"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Available must be ≤ total.
+          </p>
+        </div>
+      </div>
+
+      {/* IMAGE UPLOAD */}
+      <div>
+        <label className="font-semibold text-sm">Toy Images</label>
+
         <input
           type="file"
           accept="image/*"
           multiple
           onChange={onUpload}
-          className="w-full border p-2 rounded"
+          className="border p-2 rounded w-full"
         />
 
-        {uploading && <p className="text-sm text-blue-500">Uploading...</p>}
+        {uploading && (
+          <p className="text-sm text-yellow-600 mt-1">Uploading...</p>
+        )}
 
-        <ImagePreviewList images={formData.images} onRemove={onRemoveImage} />
+        {/* Image Previews */}
+        {formData.images?.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+            {formData.images.map((img, index) => (
+              <div key={index} className="relative">
+                <img
+                  src={img}
+                  alt="Toy"
+                  className="w-full h-24 object-cover rounded border"
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveImage(index)}
+                  className="absolute top-1 right-1 bg-red-600 text-white text-xs px-1 py-[2px] rounded"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <textarea
-        name="description"
-        value={formData.description}
-        onChange={onChange}
-        placeholder="Description"
-        className="w-full border p-2 rounded"
-      />
-
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <select
-          name="category"
-          value={formData.category}
-          onChange={onChange}
-          className="p-2 border rounded"
-        >
-          <option value="">Select Category</option>
-          {CATEGORY_OPTIONS.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-
-        <select
-          name="ageGroup"
-          value={formData.ageGroup}
-          onChange={onChange}
-          className="p-2 border rounded"
-        >
-          <option value="">Select Age Group</option>
-          {AGE_GROUP_OPTIONS.map((a) => (
-            <option key={a}>{a}</option>
-          ))}
-        </select>
-
-        <select
-          name="status"
-          value={formData.status}
-          onChange={onChange}
-          className="p-2 border rounded"
-        >
-          {ITEM_STATUS_OPTIONS.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-
-        <div className="flex flex-col gap-2">
-          <input
-            type="number"
-            name="quantity"
-            min="0"
-            value={formData.quantity}
-            onChange={onChange}
-            className="p-2 border rounded"
-            placeholder="Available"
-          />
-
-          <input
-            type="number"
-            name="totalQuantity"
-            min="0"
-            value={formData.totalQuantity}
-            onChange={onChange}
-            className="p-2 border rounded"
-            placeholder="Total Inventory"
-          />
-        </div>
-      </div>
-
-      <button className="bg-bethDeepBlue text-white px-4 py-2 rounded">
-        Save
+      {/* SUBMIT BUTTON */}
+      <button
+        type="submit"
+        className="w-full py-3 bg-bethDeepBlue hover:bg-bethLightBlue text-white font-semibold rounded"
+      >
+        Save Toy
       </button>
     </form>
   );
