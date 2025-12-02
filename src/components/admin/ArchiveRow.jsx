@@ -10,22 +10,25 @@ export default function ArchiveRow({ entry, onRestore, onDelete }) {
   return (
     <tr>
       {/* Item */}
-      <td className="p-2 border">{entry.itemName}</td>
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.itemName}
+        </td>
+        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.parentName}
+        </td>
+        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.parentEmail}
+        </td>
+        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.childName}
+        </td>
+        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        Returned
+        </td>
+        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.archivedAt?.toDate?.().toLocaleDateString() ?? "N/A"}
+        </td>
 
-      {/* Parent */}
-      <td className="p-2 border">{entry.parentName}</td>
-
-      {/* Email */}
-      <td className="p-2 border">{entry.parentEmail}</td>
-
-      {/* Child */}
-      <td className="p-2 border">{entry.childName}</td>
-
-      {/* Preferred Day */}
-      <td className="p-2 border">{entry.preferredDay || "-"}</td>
-
-      {/* Returned Date */}
-      <td className="p-2 border">{returnedDate}</td>
 
       {/* Actions */}
       <td className="p-2 border">

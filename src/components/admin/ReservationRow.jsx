@@ -6,11 +6,26 @@ import { RESERVATION_STATUS_OPTIONS } from "./constants";
 export default function ReservationRow({ res, onStatus, onDelete }) {
   return (
     <tr className="hover:bg-gray-50">
-      <td className="p-2 border">{res.itemName}</td>
-      <td className="p-2 border">{res.parentName}</td>
-      <td className="p-2 border">{res.parentEmail}</td>
-      <td className="p-2 border">{res.childName}</td>
-      <td className="p-2 border">{res.preferredDay}</td>
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+  {res.itemName}
+</td>
+
+<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+  {res.parentName}
+</td>
+
+<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+  {res.parentEmail}
+</td>
+
+<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+  {res.childName}
+</td>
+
+<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+  {res.preferredDay}
+</td>
+
 
       <td className="p-2 border">
         <span

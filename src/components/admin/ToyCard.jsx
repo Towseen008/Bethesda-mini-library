@@ -10,7 +10,7 @@ export default function ToyCard({ item, onEdit, onDelete }) {
         className="w-full h-48 object-cover rounded"
       />
 
-      <h3 className="font-semibold text-bethDeepBlue">{item.name}</h3>
+      <h3 className="font-semibold text-bethDeepBlue truncate">{item.name}</h3>
       <p className="text-sm">Category: {item.category}</p>
       <p className="text-sm">Age: {item.ageGroup}</p>
 
