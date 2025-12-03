@@ -89,3 +89,30 @@ background-color: #ffffff;
 .animate-cardPop {
   animation: cardPop 0.7s ease-out forwards;
 }
+
+@keyframes fadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeUp {
+  animation: fadeUp 0.35s ease forwards;
+}
+
+@keyframes wiggle {
+  0%   { transform: scale(1) rotate(0deg); }
+  25%  { transform: scale(1.1) rotate(-8deg); }
+  50%  { transform: scale(1.15) rotate(8deg); }
+  75%  { transform: scale(1.1) rotate(-6deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.animate-wiggle {
+  animation: wiggle 0.8s ease-in-out;
+}

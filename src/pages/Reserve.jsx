@@ -27,19 +27,12 @@ export default function Reserve() {
     note: ""
   });
 
-  /* --------------------------------------------------------
-     LOAD ITEM DETAILS
-  --------------------------------------------------------- */
   useEffect(() => {
     const fetchItem = async () => {
       try {
         const ref = doc(db, "items", id);
         const snap = await getDoc(ref);
-        if (snap.exists()) {
-          setItem(snap.data());
-        } else {
-          console.error("Item not found.");
-        }
+        if (snap.exists()) setItem(snap.data());
       } catch (err) {
         console.error("Error loading item:", err);
       } finally {
@@ -53,9 +46,6 @@ export default function Reserve() {
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  /* --------------------------------------------------------
-     SUBMIT RESERVATION  (Available / Treated-as-Available)
-  --------------------------------------------------------- */
   const submitReservation = async (e) => {
     e.preventDefault();
     if (!item) return;
@@ -74,21 +64,15 @@ export default function Reserve() {
       });
 
       navigate("/confirmation", {
-        state: {
-          type: "reservation",
-          itemName: item.name
-        }
+        state: { type: "reservation", itemName: item.name }
       });
+
     } catch (err) {
       console.error("Error submitting reservation:", err);
       alert("Error creating reservation.");
     }
   };
 
-  /* --------------------------------------------------------
-     WAITLIST SUBMISSION (for On Loan toys)
-     → Saved to "wishlists" ONLY
-  --------------------------------------------------------- */
   const submitWaitlist = async (e) => {
     e.preventDefault();
     if (!item) return;
@@ -106,20 +90,15 @@ export default function Reserve() {
       });
 
       navigate("/confirmation", {
-        state: {
-          type: "waitlist",
-          itemName: item.name
-        }
+        state: { type: "waitlist", itemName: item.name }
       });
+
     } catch (err) {
       console.error("Error submitting waitlist:", err);
       alert("Error adding to waitlist.");
     }
   };
 
-  /* --------------------------------------------------------
-     PAGE OUTPUT
-  --------------------------------------------------------- */
   if (loading)
     return (
       <div className="text-center py-8">
@@ -131,19 +110,32 @@ export default function Reserve() {
     return <p className="text-center py-8 text-red-500">Item not found.</p>;
 
   const isOnLoan = item.status === "On Loan";
+  const today = new Date().toISOString().split("T")[0];
 
   return (
     <div className="max-w-xl mx-auto p-6 bg-white shadow rounded">
-      <h2 className="text-2xl font-bold text-bethDeepBlue mb-4">
+
+      <h2 className="text-2xl font-bold text-bethDeepBlue mb-4 animate-fadeUp">
         {isOnLoan ? "Join Waitlist" : "Reserve Toy"}
       </h2>
 
+      {/* IMAGE */}
+      {item.images?.length > 0 && (
+        <div className="w-full h-72 sm:h-96 bg-gray-100 mb-5 flex justify-center items-center overflow-hidden rounded animate-fadeUp">
+          <img
+            src={item.images[0]}
+            alt={item.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+
       {/* ITEM INFO */}
-      <p className="text-sm mb-4">
+      <p className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-4 animate-fadeUp">
         <span className="font-semibold">Toy:</span> {item.name}
       </p>
 
-      <p className="text-sm mb-4">
+      <p className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-4 animate-fadeUp">
         <span className="font-semibold">Status:</span>{" "}
         <span className={isOnLoan ? "text-red-600 font-bold" : "text-green-600 font-bold"}>
           {item.status}
@@ -152,7 +144,7 @@ export default function Reserve() {
 
       {/* WAITLIST WARNING */}
       {isOnLoan && (
-        <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 rounded mb-4 text-sm">
+        <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 rounded mb-6 text-sm animate-fadeUp">
           This toy is currently on loan. You may join the waitlist.
           <br />
           <span className="text-xs italic text-gray-700">
@@ -164,63 +156,101 @@ export default function Reserve() {
       {/* FORM */}
       <form
         onSubmit={isOnLoan ? submitWaitlist : submitReservation}
-        className="space-y-3"
+        className="space-y-4"
       >
-        <input
-          type="text"
-          required
-          name="parentName"
-          placeholder="Parent's Name"
-          value={formData.parentName}
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-        />
-
-        <input
-          type="email"
-          required
-          name="parentEmail"
-          placeholder="Parent Email"
-          value={formData.parentEmail}
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-        />
-
-        <input
-          type="text"
-          required
-          name="childName"
-          placeholder="Child's Name"
-          value={formData.childName}
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-        />
-
-        {/* Preferred day ONLY for reservations */}
-        {!isOnLoan && (
+        {/* Parent Name */}
+        <div className="animate-fadeUp">
+          <label className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-1">
+            Parent's Name
+          </label>
           <input
             type="text"
             required
-            name="preferredDay"
-            placeholder="Preferred Pick-Up Day"
-            value={formData.preferredDay}
+            name="parentName"
+            placeholder="Enter parent's name"
+            value={formData.parentName}
             onChange={handleChange}
             className="w-full border p-2 rounded"
           />
+        </div>
+
+        {/* Parent Email */}
+        <div className="animate-fadeUp">
+          <label className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-1">
+            Parent Email
+          </label>
+          <input
+            type="email"
+            required
+            name="parentEmail"
+            placeholder="Enter parent email"
+            value={formData.parentEmail}
+            onChange={handleChange}
+            className="w-full border p-2 rounded"
+          />
+        </div>
+
+        {/* Child Name */}
+        <div className="animate-fadeUp">
+          <label className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-1">
+            Child's Name
+          </label>
+          <input
+            type="text"
+            required
+            name="childName"
+            placeholder="Enter child's name"
+            value={formData.childName}
+            onChange={handleChange}
+            className="w-full border p-2 rounded"
+          />
+        </div>
+
+        {/* Preferred Day */}
+        {!isOnLoan && (
+          <div className="animate-fadeUp">
+            <label className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-1">
+              Preferred Pick-Up Day
+            </label>
+            <input
+              type="date"
+              required
+              name="preferredDay"
+              min={today}
+              value={formData.preferredDay}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+            />
+
+            {/* {formData.preferredDay && (
+              <p className="text-sm mt-1 text-gray-600">
+                Pickup date selected:{" "}
+                <span className="font-semibold">
+                  {new Date(formData.preferredDay).toLocaleDateString()}
+                </span>
+              </p>
+            )} */}
+          </div>
         )}
 
-        <textarea
-          name="note"
-          placeholder="Additional Notes (optional)"
-          value={formData.note}
-          onChange={handleChange}
-          className="w-full border p-2 rounded h-24"
-        />
+        {/* Notes */}
+        <div className="animate-fadeUp">
+          <label className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-1">
+            Additional Notes
+          </label>
+          <textarea
+            name="note"
+            placeholder="Optional message..."
+            value={formData.note}
+            onChange={handleChange}
+            className="w-full border p-2 rounded h-24"
+          />
+        </div>
 
-        {/* SUBMIT BUTTON */}
+        {/* Submit */}
         <button
           type="submit"
-          className={`w-full py-2 rounded text-white font-semibold ${
+          className={`w-full py-2 rounded text-white font-semibold animate-fadeUp ${
             isOnLoan
               ? "bg-purple-600 hover:bg-purple-700"
               : "bg-bethDeepBlue hover:bg-bethLightBlue"

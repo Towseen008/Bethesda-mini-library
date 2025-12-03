@@ -1,6 +1,8 @@
 // src/pages/Confirmation.jsx
 
 import { Link, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import confetti from "canvas-confetti";
 
 export default function Confirmation() {
   const location = useLocation();
@@ -8,6 +10,26 @@ export default function Confirmation() {
   const itemName = location.state?.itemName || "Toy";
 
   const isWaitlist = type === "waitlist";
+
+  /* --------------------------------------------------------
+     TRIGGER CONFETTI OR FINGER-CROSSED ANIMATION ON LOAD
+  --------------------------------------------------------- */
+  useEffect(() => {
+    if (!isWaitlist) {
+      // 🎉 Confetti for reservations
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+    } else {
+      // 🤞 Finger crossed animation (subtle float effect)
+      const icon = document.getElementById("waitlist-icon");
+      if (icon) {
+        icon.classList.add("animate-wiggle");
+      }
+    }
+  }, [isWaitlist]);
 
   return (
     <div className="max-w-xl mx-auto p-6 bg-white shadow rounded text-center mt-10">
@@ -17,7 +39,16 @@ export default function Confirmation() {
       </h2>
 
       {/* SUCCESS ICON */}
-      <div className="text-green-600 text-6xl mb-4">✔</div>
+      {!isWaitlist ? (
+        <div className="text-green-600 text-6xl mb-4">✔</div>
+      ) : (
+        <div
+          id="waitlist-icon"
+          className="text-yellow-600 text-6xl mb-4 select-none"
+        >
+          🤞
+        </div>
+      )}
 
       {/* MAIN MESSAGE */}
       {!isWaitlist ? (
