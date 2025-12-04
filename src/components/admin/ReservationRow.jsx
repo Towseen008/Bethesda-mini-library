@@ -4,40 +4,46 @@ import { badgeColor } from "./helpers";
 import { RESERVATION_STATUS_OPTIONS } from "./constants";
 
 export default function ReservationRow({ res, onStatus, onDelete }) {
+  const status = res.status || "Pending"; // Safe fallback
+
+  // Format preferredDay safely
+  const preferred = res.preferredDay
+    ? new Date(res.preferredDay).toLocaleDateString()
+    : "—";
+
   return (
     <tr className="hover:bg-gray-50">
       <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-  {res.itemName}
-</td>
+        {res.itemName}
+      </td>
 
-<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-  {res.parentName}
-</td>
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {res.parentName}
+      </td>
 
-<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-  {res.parentEmail}
-</td>
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {res.parentEmail}
+      </td>
 
-<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-  {res.childName}
-</td>
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {res.childName}
+      </td>
 
-<td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-  {res.preferredDay}
-</td>
-
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {preferred}
+      </td>
 
       <td className="p-2 border">
         <span
-          className={`px-2 py-1 text-xs rounded-full ${badgeColor(res.status)}`}
+          className={`px-2 py-1 text-xs rounded-full ${badgeColor(status)}`}
         >
-          {res.status}
+          {status}
         </span>
       </td>
 
       <td className="p-2 border flex gap-1">
         <select
-          value={res.status}
+          value={status}
           onChange={(e) => onStatus(res, e.target.value)}
           className="border p-1 text-xs rounded"
         >

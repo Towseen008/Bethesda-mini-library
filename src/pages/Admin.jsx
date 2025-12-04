@@ -12,7 +12,8 @@ import {
   onSnapshot,
   getDoc,
 } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { signOut } from "firebase/auth";
+import { auth, db } from "../firebaseConfig";
 
 // Components
 import SectionCard from "../components/admin/SectionCard";
@@ -145,91 +146,101 @@ export default function Admin() {
     setCurrentItemPage(1);
   }, [items, categoryFilter, itemSearchTerm, sortOption]);
 
-  /* ---------------- FILTER RESERVATIONS ------------- */
-  useEffect(() => {
-    let updated = [...reservations];
+ /* ---------------- FILTER RESERVATIONS ------------- */
+useEffect(() => {
+  let updated = [...reservations];
 
-    if (reservationSearchTerm) {
-      const t = reservationSearchTerm.toLowerCase();
-      updated = updated.filter((r) => {
-        const dateStr = r.createdAt?.toDate
-          ? r.createdAt.toDate().toLocaleDateString().toLowerCase()
-          : "";
-        return (
-          r.itemName?.toLowerCase().includes(t) ||
-          r.parentName?.toLowerCase().includes(t) ||
-          r.childName?.toLowerCase().includes(t) ||
-          dateStr.includes(t)
-        );
-      });
-    }
-
-    if (reservationStatusFilter)
-      updated = updated.filter((r) => r.status === reservationStatusFilter);
-
-    setFilteredReservations(updated);
-    setCurrentReservationPage(1);
-  }, [reservations, reservationSearchTerm, reservationStatusFilter]);
-
-  /* ---------------- FILTER + SORT WISHLIST ------------- */
-  useEffect(() => {
-    let updated = [...wishlist];
-
-    if (wishlistSearch) {
-      const term = wishlistSearch.toLowerCase();
-      updated = updated.filter((w) => {
-        const dateStr = w.createdAt?.toDate
-          ? w.createdAt.toDate().toLocaleDateString().toLowerCase()
-          : "";
-        return (
-          w.itemName?.toLowerCase().includes(term) ||
-          w.parentName?.toLowerCase().includes(term) ||
-          w.childName?.toLowerCase().includes(term) ||
-          dateStr.includes(term)
-        );
-      });
-    }
-
-    // Oldest waitlist first
-    updated.sort((a, b) => {
-      const aTime = a.createdAt?.seconds || 0;
-      const bTime = b.createdAt?.seconds || 0;
-      return aTime - bTime;
+  // Search
+  if (reservationSearchTerm) {
+    const t = reservationSearchTerm.toLowerCase();
+    updated = updated.filter((r) => {
+      const dateStr = r.createdAt?.toDate
+        ? r.createdAt.toDate().toLocaleDateString().toLowerCase()
+        : "";
+      return (
+        r.itemName?.toLowerCase().includes(t) ||
+        r.parentName?.toLowerCase().includes(t) ||
+        r.childName?.toLowerCase().includes(t) ||
+        dateStr.includes(t)
+      );
     });
+  }
 
-    setFilteredWishlist(updated);
-    setCurrentWishlistPage(1);
-  }, [wishlist, wishlistSearch]);
+  // Status filter
+  if (reservationStatusFilter)
+    updated = updated.filter((r) => r.status === reservationStatusFilter);
 
-  /* ---------------- FILTER + SORT ARCHIVES ------------- */
-  useEffect(() => {
-    let updated = [...archives];
+  // 🔥 NEW — sort by createdAt newest → oldest
+  updated.sort(
+    (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+  );
 
-    if (archiveSearch) {
-      const term = archiveSearch.toLowerCase();
-      updated = updated.filter((a) => {
-        const dateStr = a.archivedAt?.toDate
-          ? a.archivedAt.toDate().toLocaleDateString().toLowerCase()
-          : "";
-        return (
-          a.itemName?.toLowerCase().includes(term) ||
-          a.parentName?.toLowerCase().includes(term) ||
-          a.childName?.toLowerCase().includes(term) ||
-          dateStr.includes(term)
-        );
-      });
-    }
+  setFilteredReservations(updated);
+  setCurrentReservationPage(1);
+}, [reservations, reservationSearchTerm, reservationStatusFilter]);
 
-    // Newest returns first
-    updated.sort((a, b) => {
-      const aTime = a.archivedAt?.seconds || 0;
-      const bTime = b.archivedAt?.seconds || 0;
-      return bTime - aTime;
+
+
+ /* ---------------- FILTER + SORT WISHLIST ------------- */
+useEffect(() => {
+  let updated = [...wishlist];
+
+  // Search
+  if (wishlistSearch) {
+    const term = wishlistSearch.toLowerCase();
+    updated = updated.filter((w) => {
+      const dateStr = w.createdAt?.toDate
+        ? w.createdAt.toDate().toLocaleDateString().toLowerCase()
+        : "";
+      return (
+        w.itemName?.toLowerCase().includes(term) ||
+        w.parentName?.toLowerCase().includes(term) ||
+        w.childName?.toLowerCase().includes(term) ||
+        dateStr.includes(term)
+      );
     });
+  }
 
-    setFilteredArchives(updated);
-    setCurrentArchivePage(1);
-  }, [archives, archiveSearch]);
+  // 🔥 NEW — newest waitlist first
+  updated.sort(
+    (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+  );
+
+  setFilteredWishlist(updated);
+  setCurrentWishlistPage(1);
+}, [wishlist, wishlistSearch]);
+
+
+
+ /* ---------------- FILTER + SORT ARCHIVES ------------- */
+useEffect(() => {
+  let updated = [...archives];
+
+  // Search
+  if (archiveSearch) {
+    const term = archiveSearch.toLowerCase();
+    updated = updated.filter((a) => {
+      const dateStr = a.archivedAt?.toDate
+        ? a.archivedAt.toDate().toLocaleDateString().toLowerCase()
+        : "";
+      return (
+        a.itemName?.toLowerCase().includes(term) ||
+        a.parentName?.toLowerCase().includes(term) ||
+        a.childName?.toLowerCase().includes(term) ||
+        dateStr.includes(term)
+      );
+    });
+  }
+
+  // 🔥 newest → oldest by archive timestamp
+  updated.sort(
+    (a, b) => (b.archivedAt?.seconds || 0) - (a.archivedAt?.seconds || 0)
+  );
+
+  setFilteredArchives(updated);
+  setCurrentArchivePage(1);
+}, [archives, archiveSearch]);
+
 
   /* ---------------- FORM CHANGE ------------------ */
   const handleChange = (e) =>
@@ -527,11 +538,31 @@ export default function Admin() {
   ).length;
   const waitlistCount = wishlist.length;
 
+  /* ------------------- LOGOUT ------------------- */
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      window.location.href = "/admin-login";
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+  };
+
   /* ======================= RENDER ======================= */
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-10">
-      <h2 className="text-2xl font-bold text-bethDeepBlue">Admin Dashboard</h2>
+      {/* HEADER + LOGOUT */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-bethDeepBlue">Admin Dashboard</h2>
+
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 transition"
+        >
+          Logout
+        </button>
+      </div>
 
       {/* SUMMARY CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
