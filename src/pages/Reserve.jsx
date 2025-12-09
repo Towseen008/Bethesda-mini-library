@@ -46,6 +46,9 @@ export default function Reserve() {
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
+  /* -----------------------------------------------------------
+      SUBMIT RESERVATION
+  ----------------------------------------------------------- */
   const submitReservation = async (e) => {
     e.preventDefault();
     if (!item) return;
@@ -63,6 +66,21 @@ export default function Reserve() {
         createdAt: serverTimestamp()
       });
 
+      /* 🔔 Send email notification */
+      fetch("http://localhost:4000/email/reservation-created", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentEmail: formData.parentEmail,
+          parentName: formData.parentName,
+          childName: formData.childName,
+          itemName: item.name,
+          preferredDay: formData.preferredDay
+        }),
+      }).catch((err) =>
+        console.error("Email service error (reservation-created):", err)
+      );
+
       navigate("/confirmation", {
         state: { type: "reservation", itemName: item.name }
       });
@@ -73,6 +91,9 @@ export default function Reserve() {
     }
   };
 
+  /* -----------------------------------------------------------
+      SUBMIT WAITLIST
+  ----------------------------------------------------------- */
   const submitWaitlist = async (e) => {
     e.preventDefault();
     if (!item) return;
@@ -88,6 +109,20 @@ export default function Reserve() {
         note: "Waitlist request — Admin review required",
         createdAt: serverTimestamp()
       });
+
+      /* 🔔 Send waitlist email */
+      fetch("http://localhost:4000/email/waitlist-created", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentEmail: formData.parentEmail,
+          parentName: formData.parentName,
+          childName: formData.childName,
+          itemName: item.name
+        }),
+      }).catch((err) =>
+        console.error("Email service error (waitlist-created):", err)
+      );
 
       navigate("/confirmation", {
         state: { type: "waitlist", itemName: item.name }
@@ -221,15 +256,6 @@ export default function Reserve() {
               onChange={handleChange}
               className="w-full border p-2 rounded"
             />
-
-            {/* {formData.preferredDay && (
-              <p className="text-sm mt-1 text-gray-600">
-                Pickup date selected:{" "}
-                <span className="font-semibold">
-                  {new Date(formData.preferredDay).toLocaleDateString()}
-                </span>
-              </p>
-            )} */}
           </div>
         )}
 

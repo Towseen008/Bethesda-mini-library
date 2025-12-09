@@ -146,101 +146,96 @@ export default function Admin() {
     setCurrentItemPage(1);
   }, [items, categoryFilter, itemSearchTerm, sortOption]);
 
- /* ---------------- FILTER RESERVATIONS ------------- */
-useEffect(() => {
-  let updated = [...reservations];
+  /* ---------------- FILTER RESERVATIONS ------------- */
+  useEffect(() => {
+    let updated = [...reservations];
 
-  // Search
-  if (reservationSearchTerm) {
-    const t = reservationSearchTerm.toLowerCase();
-    updated = updated.filter((r) => {
-      const dateStr = r.createdAt?.toDate
-        ? r.createdAt.toDate().toLocaleDateString().toLowerCase()
-        : "";
-      return (
-        r.itemName?.toLowerCase().includes(t) ||
-        r.parentName?.toLowerCase().includes(t) ||
-        r.childName?.toLowerCase().includes(t) ||
-        dateStr.includes(t)
-      );
-    });
-  }
+    // Search
+    if (reservationSearchTerm) {
+      const t = reservationSearchTerm.toLowerCase();
+      updated = updated.filter((r) => {
+        const dateStr = r.createdAt?.toDate
+          ? r.createdAt.toDate().toLocaleDateString().toLowerCase()
+          : "";
+        return (
+          r.itemName?.toLowerCase().includes(t) ||
+          r.parentName?.toLowerCase().includes(t) ||
+          r.childName?.toLowerCase().includes(t) ||
+          dateStr.includes(t)
+        );
+      });
+    }
 
-  // Status filter
-  if (reservationStatusFilter)
-    updated = updated.filter((r) => r.status === reservationStatusFilter);
+    // Status filter
+    if (reservationStatusFilter)
+      updated = updated.filter((r) => r.status === reservationStatusFilter);
 
-  // 🔥 NEW — sort by createdAt newest → oldest
-  updated.sort(
-    (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
-  );
+    // newest → oldest by createdAt
+    updated.sort(
+      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+    );
 
-  setFilteredReservations(updated);
-  setCurrentReservationPage(1);
-}, [reservations, reservationSearchTerm, reservationStatusFilter]);
+    setFilteredReservations(updated);
+    setCurrentReservationPage(1);
+  }, [reservations, reservationSearchTerm, reservationStatusFilter]);
 
+  /* ---------------- FILTER + SORT WISHLIST ------------- */
+  useEffect(() => {
+    let updated = [...wishlist];
 
+    // Search
+    if (wishlistSearch) {
+      const term = wishlistSearch.toLowerCase();
+      updated = updated.filter((w) => {
+        const dateStr = w.createdAt?.toDate
+          ? w.createdAt.toDate().toLocaleDateString().toLowerCase()
+          : "";
+        return (
+          w.itemName?.toLowerCase().includes(term) ||
+          w.parentName?.toLowerCase().includes(term) ||
+          w.childName?.toLowerCase().includes(term) ||
+          dateStr.includes(term)
+        );
+      });
+    }
 
- /* ---------------- FILTER + SORT WISHLIST ------------- */
-useEffect(() => {
-  let updated = [...wishlist];
+    // newest → oldest by createdAt
+    updated.sort(
+      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+    );
 
-  // Search
-  if (wishlistSearch) {
-    const term = wishlistSearch.toLowerCase();
-    updated = updated.filter((w) => {
-      const dateStr = w.createdAt?.toDate
-        ? w.createdAt.toDate().toLocaleDateString().toLowerCase()
-        : "";
-      return (
-        w.itemName?.toLowerCase().includes(term) ||
-        w.parentName?.toLowerCase().includes(term) ||
-        w.childName?.toLowerCase().includes(term) ||
-        dateStr.includes(term)
-      );
-    });
-  }
+    setFilteredWishlist(updated);
+    setCurrentWishlistPage(1);
+  }, [wishlist, wishlistSearch]);
 
-  // 🔥 NEW — newest waitlist first
-  updated.sort(
-    (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
-  );
+  /* ---------------- FILTER + SORT ARCHIVES ------------- */
+  useEffect(() => {
+    let updated = [...archives];
 
-  setFilteredWishlist(updated);
-  setCurrentWishlistPage(1);
-}, [wishlist, wishlistSearch]);
+    // Search
+    if (archiveSearch) {
+      const term = archiveSearch.toLowerCase();
+      updated = updated.filter((a) => {
+        const dateStr = a.archivedAt?.toDate
+          ? a.archivedAt.toDate().toLocaleDateString().toLowerCase()
+          : "";
+        return (
+          a.itemName?.toLowerCase().includes(term) ||
+          a.parentName?.toLowerCase().includes(term) ||
+          a.childName?.toLowerCase().includes(term) ||
+          dateStr.includes(term)
+        );
+      });
+    }
 
+    // newest → oldest by archivedAt
+    updated.sort(
+      (a, b) => (b.archivedAt?.seconds || 0) - (a.archivedAt?.seconds || 0)
+    );
 
-
- /* ---------------- FILTER + SORT ARCHIVES ------------- */
-useEffect(() => {
-  let updated = [...archives];
-
-  // Search
-  if (archiveSearch) {
-    const term = archiveSearch.toLowerCase();
-    updated = updated.filter((a) => {
-      const dateStr = a.archivedAt?.toDate
-        ? a.archivedAt.toDate().toLocaleDateString().toLowerCase()
-        : "";
-      return (
-        a.itemName?.toLowerCase().includes(term) ||
-        a.parentName?.toLowerCase().includes(term) ||
-        a.childName?.toLowerCase().includes(term) ||
-        dateStr.includes(term)
-      );
-    });
-  }
-
-  // 🔥 newest → oldest by archive timestamp
-  updated.sort(
-    (a, b) => (b.archivedAt?.seconds || 0) - (a.archivedAt?.seconds || 0)
-  );
-
-  setFilteredArchives(updated);
-  setCurrentArchivePage(1);
-}, [archives, archiveSearch]);
-
+    setFilteredArchives(updated);
+    setCurrentArchivePage(1);
+  }, [archives, archiveSearch]);
 
   /* ---------------- FORM CHANGE ------------------ */
   const handleChange = (e) =>
@@ -263,7 +258,10 @@ useEffect(() => {
     for (let f of files) {
       const data = new FormData();
       data.append("file", f);
-      data.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+      data.append(
+        "upload_preset",
+        import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+      );
 
       const res = await fetch(
         `https://api.cloudinary.com/v1_1/${
@@ -337,6 +335,26 @@ useEffect(() => {
     fetchItems();
   };
 
+  /* ------------------- STATUS EMAIL HELPER ------------------- */
+  const sendStatusEmail = (reservation, newStatus) => {
+    if (!reservation?.parentEmail) return;
+
+    fetch("http://localhost:4000/email/status-updated", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parentEmail: reservation.parentEmail,
+        parentName: reservation.parentName,
+        childName: reservation.childName,
+        itemName: reservation.itemName,
+        newStatus,
+        preferredDay: reservation.preferredDay || "",
+      }),
+    }).catch((err) =>
+      console.error("Email service error (status-updated):", err)
+    );
+  };
+
   /* ----------- RESERVATION STATUS UPDATE + AUTO-ARCHIVE ----------- */
   const handleReservationStatus = async (reservation, newStatus) => {
     try {
@@ -381,15 +399,22 @@ useEffect(() => {
         });
 
         await deleteDoc(resRef);
+
+        // 🔔 send status-updated email (Returned)
+        sendStatusEmail(reservation, newStatus);
+
         fetchItems();
         return;
       }
 
-      // Pending / Ready for Pickup: inventory unchanged
+      // Pending / Ready for Pickup: inventory unchanged except maybe for Ready?
       await updateDoc(itemRef, {
         quantity,
         status: itemStatus,
       });
+
+      // send status-updated email for all other status changes
+      sendStatusEmail(reservation, newStatus);
 
       fetchItems();
     } catch (err) {
@@ -444,7 +469,7 @@ useEffect(() => {
 
         await deleteDoc(doc(db, "archives", payload.id));
 
-        // Switch to Reservations tab (Option A)
+        // Switch to Reservations tab
         setActiveTab("reservations");
       } else if (mode === "deleteArchive") {
         await deleteDoc(doc(db, "archives", payload.id));
@@ -716,7 +741,6 @@ useEffect(() => {
             <h3 className="text-2xl font-bold text-bethDeepBlue">
               Reservations
             </h3>
-
             <button
               onClick={exportReservationsCSV}
               className="bg-purple-600 text-white px-3 py-2 rounded text-sm"

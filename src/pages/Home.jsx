@@ -18,7 +18,7 @@ export default function Home() {
 
   const itemsPerPage = 9;
   const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState("grid"); // "grid" | "list"
+  const [viewMode, setViewMode] = useState("grid");
 
   /* ---------- Fetch items ---------- */
   useEffect(() => {
@@ -46,13 +46,12 @@ export default function Home() {
   useEffect(() => {
     let updated = [...items];
 
-    // Treat Pending as Available for parents (display logic only)
+    // Pending is treated as Available for parents
     updated = updated.map((i) => ({
       ...i,
       status: i.status === "Pending" ? "Available" : i.status,
     }));
 
-    // Text search
     if (searchTerm.trim()) {
       updated = updated.filter((item) =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -61,12 +60,10 @@ export default function Home() {
 
     const [filterType, filterValue] = filterOption.split(":");
 
-    // Category filter
     if (filterType === "category") {
       updated = updated.filter((i) => i.category === filterValue);
     }
 
-    // Age filter
     if (filterType === "age") {
       if (filterValue !== "All Age") {
         updated = updated.filter((i) => {
@@ -74,21 +71,16 @@ export default function Home() {
           return age.toLowerCase().includes(filterValue.toLowerCase());
         });
       }
-      // If "All Age", we do NOT filter by age (show all ages)
     }
 
-    // Status filter
     if (filterType === "status") {
       if (filterValue === "Available") {
-        // Available includes Pending (already mapped above)
         updated = updated.filter((i) => i.status === "Available");
       } else {
-        // On Loan filter is normal
         updated = updated.filter((i) => i.status === filterValue);
       }
     }
 
-    // Sorting
     if (filterType === "sort") {
       if (filterValue === "newest") {
         updated.sort(
@@ -106,26 +98,23 @@ export default function Home() {
   }, [filterOption, searchTerm, items]);
 
   /* ---------- Pagination ---------- */
-  const totalCatalog = items.length;
   const totalFiltered = filteredItems.length;
   const totalPages = Math.ceil(totalFiltered / itemsPerPage);
+
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentItems = filteredItems.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  );
-  const showingCount = currentItems.length;
+  const endIndex = startIndex + itemsPerPage;
+  const currentItems = filteredItems.slice(startIndex, endIndex);
+
+  const showingStart = startIndex + 1;
+  const showingEnd = Math.min(endIndex, totalFiltered);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
-
-    const element = document.getElementById("available-toys");
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-    }
+    const section = document.getElementById("available-toys");
+    if (section) section.scrollIntoView({ behavior: "smooth" });
   };
 
-  /* ---------- Helpers for filter chips ---------- */
+  /* ---------- Active filter chips ---------- */
   const activeChips = [];
 
   if (searchTerm.trim()) {
@@ -144,16 +133,11 @@ export default function Home() {
     if (filterType === "category") label = `Category: ${filterValue}`;
     if (filterType === "sort") {
       if (filterValue === "newest") label = "Sort: Newest";
-      else if (filterValue === "az") label = "Sort: A → Z";
-      else if (filterValue === "za") label = "Sort: Z → A";
+      if (filterValue === "az") label = "Sort: A → Z";
+      if (filterValue === "za") label = "Sort: Z → A";
     }
 
-    if (label) {
-      activeChips.push({
-        type: "filter",
-        label,
-      });
-    }
+    if (label) activeChips.push({ type: "filter", label });
   }
 
   const clearAllFilters = () => {
@@ -211,23 +195,20 @@ export default function Home() {
         Available Toys
       </h2>
 
-      {/* SUMMARY & VIEW TOGGLE */}
+      {/* SUMMARY + VIEW MODE */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <p className="text-sm text-gray-700">
           Showing{" "}
           <span className="font-semibold">
-            {showingCount} of {totalFiltered}
+            {showingStart}–{showingEnd} of {totalFiltered}
           </span>{" "}
           items{" "}
-          <span className="text-gray-500">
-            (Total catalog: <span className="font-semibold">{totalCatalog}</span>)
-          </span>
         </p>
 
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">View:</span>
+
           <button
-            type="button"
             onClick={() => setViewMode("grid")}
             className={`px-3 py-1 text-xs rounded border ${
               viewMode === "grid"
@@ -237,8 +218,8 @@ export default function Home() {
           >
             ⬛ Grid
           </button>
+
           <button
-            type="button"
             onClick={() => setViewMode("list")}
             className={`px-3 py-1 text-xs rounded border ${
               viewMode === "list"
@@ -251,7 +232,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Search + Filters */}
+      {/* SEARCH + FILTERS */}
       <div className="flex flex-col sm:flex-row gap-4 mt-4 flex-wrap justify-between">
         <div className="flex flex-col sm:flex-row gap-4 flex-1">
           <input
@@ -303,10 +284,8 @@ export default function Home() {
           </select>
         </div>
 
-        {/* Clear filters button */}
         {(searchTerm.trim() || filterOption !== "all") && (
           <button
-            type="button"
             onClick={clearAllFilters}
             className="text-xs px-3 py-1 border border-gray-300 rounded self-start sm:self-center hover:bg-gray-100"
           >
@@ -320,8 +299,7 @@ export default function Home() {
         <div className="flex flex-wrap gap-2 mt-2">
           {activeChips.map((chip, index) => (
             <button
-              key={chip.type}
-              type="button"
+              key={chip.label}
               onClick={() => {
                 if (chip.type === "search") setSearchTerm("");
                 if (chip.type === "filter") setFilterOption("all");
@@ -359,8 +337,13 @@ export default function Home() {
                   {item.name}
                 </h3>
 
-                <p className="text-sm text-gray-600 mb-2">
+                <p className="text-sm text-gray-600 mb-1">
                   Age Group: {item.ageGroup || "N/A"}
+                </p>
+
+                <p className="text-xs text-gray-500 mb-2">
+                  Category:{" "}
+                  <span className="font-semibold">{item.category || "N/A"}</span>
                 </p>
 
                 <span
@@ -377,7 +360,6 @@ export default function Home() {
           ))}
         </div>
       ) : (
-        // LIST VIEW
         <div className="space-y-3">
           {currentItems.map((item, index) => (
             <Link
@@ -398,9 +380,15 @@ export default function Home() {
                 <h3 className="text-base font-semibold text-bethDeepBlue mb-1 line-clamp-1">
                   {item.name}
                 </h3>
+
                 <p className="text-xs text-gray-600 mb-1">
                   Age Group: {item.ageGroup || "N/A"}
                 </p>
+
+                <p className="text-[11px] text-gray-500 mb-1">
+                  Category: {item.category || "N/A"}
+                </p>
+
                 <span
                   className={`inline-block px-2 py-1 rounded-full text-[11px] font-semibold ${
                     item.status === "Available"
@@ -416,11 +404,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* PAGINATION */}
+      {/* PAGINATION — Includes FIRST / LAST */}
       <Pagination
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={handlePageChange}
+        showFirstLast={true} 
       />
     </div>
   );

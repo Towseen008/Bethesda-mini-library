@@ -13,11 +13,11 @@ export function Footer() {
         />
 
         <div className="text-center md:text-right space-y-1">
-          <p className="text-sm">3280 Schmon Parkway, Thorold, ON, L2V 4Y6</p>
+          <p className="text-sm">3310 Schmon Parkway, Thorold, ON, L2V 4Y6</p>
 
           <p className="text-sm">
-            <a href="mailto:info@bethesdaservices.com" className="hover:text-bethLightBlue underline">
-              info@bethesdaservices.com
+            <a href="mailto:toylending@bethesdaservices.com" className="hover:text-bethLightBlue underline">
+              toylending@bethesdaservices.com
             </a>
           </p>
 

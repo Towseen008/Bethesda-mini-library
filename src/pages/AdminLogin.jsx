@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebaseConfig";
+import bethesdaLogo from "../assets/BethesdaLogo.png";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -32,36 +33,53 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="bg-white shadow-lg rounded-lg p-8 w-full max-w-md animate-fadeIn">
+    <div className="admin-login-page min-h-screen flex items-center justify-center relative px-4">
 
-        <h2 className="text-2xl font-bold text-center text-bethDeepBlue mb-6">
-          Admin Login
+      <div className="relative bg-white/90 backdrop-blur-md shadow-2xl rounded-xl p-8 w-full max-w-md animate-fadeIn border border-bethDeepBlue/20">
+
+        {/* Logo */}
+        <div className="flex justify-center mb-2">
+          <img
+            src={bethesdaLogo}
+            alt="Bethesda Logo"
+            className="w-24 h-24 object-contain drop-shadow-lg"
+          />
+        </div>
+
+        <h2 className="text-3xl font-extrabold text-center text-bethDeepBlue mb-2">
+          Admin Portal
         </h2>
+        <p className="text-center text-gray-600 mb-6 text-sm">
+          Staff Access Only
+        </p>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold mb-1">Email</label>
+            <label className="block text-sm font-semibold mb-1 text-bethDeepBlue">
+              Email
+            </label>
             <input
               type="email"
               name="email"
               required
               value={form.email}
               onChange={handleChange}
-              className="w-full border p-2 rounded"
-              placeholder="Admin email"
+              className="w-full border p-2 rounded focus:ring-2 focus:ring-bethLightBlue"
+              placeholder="admin@bethesda.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1">Password</label>
+            <label className="block text-sm font-semibold mb-1 text-bethDeepBlue">
+              Password
+            </label>
             <input
               type="password"
               name="password"
               required
               value={form.password}
               onChange={handleChange}
-              className="w-full border p-2 rounded"
+              className="w-full border p-2 rounded focus:ring-2 focus:ring-bethLightBlue"
               placeholder="Enter password"
             />
           </div>
@@ -73,16 +91,18 @@ export default function AdminLogin() {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-2 rounded text-white font-semibold 
-              ${loading ? "bg-gray-400" : "bg-bethDeepBlue hover:bg-bethLightBlue"}
-            `}
+            className={`w-full py-2 rounded text-white font-semibold transition ${
+              loading
+                ? "bg-gray-400"
+                : "bg-bethDeepBlue hover:bg-bethLightBlue shadow-md hover:shadow-lg"
+            }`}
           >
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
 
         <p className="text-xs text-gray-500 text-center mt-4">
-          Authorized staff only
+          © Bethesda Niagara – Authorized Use Only
         </p>
       </div>
     </div>

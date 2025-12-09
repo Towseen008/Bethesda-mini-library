@@ -74,12 +74,12 @@ export default function AboutUs() {
         </h2>
 
         <div className="space-y-2 text-gray-700">
-          <p>📍 3280 Schmon Parkway, Thorold, ON, L2V 4Y6</p>
+          <p>📍 3310 Schmon Parkway, Thorold, ON, L2V 4Y6</p>
 
           <p>
             📧{" "}
-            <a href="mailto:info@bethesdaservices.com" className="text-bethDeepBlue underline">
-              info@bethesdaservices.com
+            <a href="mailto:toylending@bethesdaservices.com" className="text-bethDeepBlue underline">
+              toylending@bethesdaservices.com
             </a>
           </p>
 
