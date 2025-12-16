@@ -2,13 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  doc,
-  getDoc,
-  addDoc,
-  collection,
-  serverTimestamp
-} from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import Spinner from "../components/Spinner";
 
@@ -24,7 +18,7 @@ export default function Reserve() {
     parentEmail: "",
     childName: "",
     preferredDay: "",
-    note: ""
+    note: "",
   });
 
   useEffect(() => {
@@ -46,6 +40,23 @@ export default function Reserve() {
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
+  // ✅ Use Render/base URL from env (fallbacks to localhost for local testing)
+  const EMAIL_API_BASE =
+    import.meta.env.VITE_EMAIL_API_URL?.replace(/\/$/, "") || "http://localhost:4000";
+
+  const sendEmail = async (endpoint, payload) => {
+    try {
+      await fetch(`${EMAIL_API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.error(`Email service error (${endpoint}):`, err);
+      // Do not block the reservation flow if email fails
+    }
+  };
+
   /* -----------------------------------------------------------
       SUBMIT RESERVATION
   ----------------------------------------------------------- */
@@ -63,28 +74,21 @@ export default function Reserve() {
         preferredDay: formData.preferredDay,
         note: formData.note || "",
         status: "Pending",
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       });
 
-      /* 🔔 Send email notification */
-      fetch("http://localhost:4000/email/reservation-created", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parentEmail: formData.parentEmail,
-          parentName: formData.parentName,
-          childName: formData.childName,
-          itemName: item.name,
-          preferredDay: formData.preferredDay
-        }),
-      }).catch((err) =>
-        console.error("Email service error (reservation-created):", err)
-      );
+      // 🔔 Send email notification (parent + admin handled by backend)
+      await sendEmail("/email/reservation-created", {
+        parentEmail: formData.parentEmail,
+        parentName: formData.parentName,
+        childName: formData.childName,
+        itemName: item.name,
+        preferredDay: formData.preferredDay,
+      });
 
       navigate("/confirmation", {
-        state: { type: "reservation", itemName: item.name }
+        state: { type: "reservation", itemName: item.name },
       });
-
     } catch (err) {
       console.error("Error submitting reservation:", err);
       alert("Error creating reservation.");
@@ -107,27 +111,20 @@ export default function Reserve() {
         childName: formData.childName,
         preferredDay: null,
         note: "Waitlist request — Admin review required",
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       });
 
-      /* 🔔 Send waitlist email */
-      fetch("http://localhost:4000/email/waitlist-created", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parentEmail: formData.parentEmail,
-          parentName: formData.parentName,
-          childName: formData.childName,
-          itemName: item.name
-        }),
-      }).catch((err) =>
-        console.error("Email service error (waitlist-created):", err)
-      );
+      // 🔔 Send waitlist email (parent + admin handled by backend)
+      await sendEmail("/email/waitlist-created", {
+        parentEmail: formData.parentEmail,
+        parentName: formData.parentName,
+        childName: formData.childName,
+        itemName: item.name,
+      });
 
       navigate("/confirmation", {
-        state: { type: "waitlist", itemName: item.name }
+        state: { type: "waitlist", itemName: item.name },
       });
-
     } catch (err) {
       console.error("Error submitting waitlist:", err);
       alert("Error adding to waitlist.");
@@ -141,17 +138,16 @@ export default function Reserve() {
       </div>
     );
 
-  if (!item)
-    return <p className="text-center py-8 text-red-500">Item not found.</p>;
+  if (!item) return <p className="text-center py-8 text-red-500">Item not found.</p>;
 
   const isOnLoan = item.status === "On Loan";
   const today = new Date().toISOString().split("T")[0];
 
   return (
     <div className="max-w-xl mx-auto p-6 bg-white shadow rounded">
-
       <h2 className="text-2xl font-bold text-bethDeepBlue mb-4 animate-fadeUp">
         {isOnLoan ? "Join Waitlist" : "Reserve Toy"}
+        <span className="font-semibold"> </span>For: {item.name}
       </h2>
 
       {/* IMAGE */}
@@ -166,10 +162,6 @@ export default function Reserve() {
       )}
 
       {/* ITEM INFO */}
-      <p className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-4 animate-fadeUp">
-        <span className="font-semibold">Toy:</span> {item.name}
-      </p>
-
       <p className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-4 animate-fadeUp">
         <span className="font-semibold">Status:</span>{" "}
         <span className={isOnLoan ? "text-red-600 font-bold" : "text-green-600 font-bold"}>
@@ -196,7 +188,7 @@ export default function Reserve() {
         {/* Parent Name */}
         <div className="animate-fadeUp">
           <label className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-1">
-            Parent's Name
+            Parent&apos;s Name
           </label>
           <input
             type="text"
@@ -228,7 +220,7 @@ export default function Reserve() {
         {/* Child Name */}
         <div className="animate-fadeUp">
           <label className="block text-bethDeepBlue font-semibold text-base sm:text-lg mb-1">
-            Child's Name
+            Child&apos;s Name
           </label>
           <input
             type="text"
@@ -277,9 +269,7 @@ export default function Reserve() {
         <button
           type="submit"
           className={`w-full py-2 rounded text-white font-semibold animate-fadeUp ${
-            isOnLoan
-              ? "bg-purple-600 hover:bg-purple-700"
-              : "bg-bethDeepBlue hover:bg-bethLightBlue"
+            isOnLoan ? "bg-purple-600 hover:bg-purple-700" : "bg-bethDeepBlue hover:bg-bethLightBlue"
           }`}
         >
           {isOnLoan ? "Join Waitlist" : "Submit Reservation"}

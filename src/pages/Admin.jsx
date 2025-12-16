@@ -34,6 +34,22 @@ import {
 
 import { downloadCSV } from "../components/admin/helpers";
 
+const sendStatusEmail = async (payload) => {
+  try {
+    await fetch(
+      `${import.meta.env.VITE_EMAIL_API_URL}/email/status-updated`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+  } catch (err) {
+    console.error("Status email error:", err);
+  }
+};
+
+
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("add");
 
@@ -339,27 +355,43 @@ export default function Admin() {
   const sendStatusEmail = (reservation, newStatus) => {
     if (!reservation?.parentEmail) return;
 
-    fetch("http://localhost:4000/email/status-updated", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        parentEmail: reservation.parentEmail,
-        parentName: reservation.parentName,
-        childName: reservation.childName,
-        itemName: reservation.itemName,
-        newStatus,
-        preferredDay: reservation.preferredDay || "",
-      }),
-    }).catch((err) =>
+    fetch(
+      `${import.meta.env.VITE_EMAIL_API_URL}/email/status-updated`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentEmail: reservation.parentEmail,
+          parentName: reservation.parentName,
+          childName: reservation.childName,
+          itemName: reservation.itemName,
+          newStatus,
+          preferredDay: reservation.preferredDay || "",
+        }),
+      }
+    ).catch((err) =>
       console.error("Email service error (status-updated):", err)
     );
   };
+
+
 
   /* ----------- RESERVATION STATUS UPDATE + AUTO-ARCHIVE ----------- */
   const handleReservationStatus = async (reservation, newStatus) => {
     try {
       const resRef = doc(db, "reservations", reservation.id);
       await updateDoc(resRef, { status: newStatus });
+      
+      // 📧 Send email ONLY for Ready for Pickup
+      if (newStatus === "Ready for Pickup") {
+        await sendStatusEmail({
+          parentEmail: reservation.parentEmail,
+          parentName: reservation.parentName,
+          childName: reservation.childName,
+          itemName: reservation.itemName,
+          newStatus,
+        });
+      }
 
       // Fetch item
       const itemRef = doc(db, "items", reservation.itemId);

@@ -10,13 +10,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1) Setup Resend client
+/* ===============================
+   CONFIG / CONSTANTS
+================================ */
+
+const BETHESDA_LOGO =
+  "https://res.cloudinary.com/towson008/image/upload/v1765341466/tp1aouaicde3zpykntkn.png";
+
+const PICKUP_INFO_HTML = `
+  <div style="margin-top:16px; padding:12px; background:#f1f5f9; border-radius:6px;">
+    <p style="margin:0;"><strong>📍 Pickup Location</strong></p>
+    <p style="margin:4px 0;">
+      Bethesda Centre<br />
+      Niagara Region
+    </p>
+    <p style="margin:8px 0 0;">
+      <strong>🕒 Pickup Hours</strong><br />
+      Monday – Friday: 9:00 AM – 4:00 PM
+    </p>
+  </div>
+`;
+
+/* ===============================
+   RESEND SETUP
+================================ */
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// 2) Helper to send a single email
 async function sendEmail({ to, subject, html }) {
   const from =
-    process.env.RESEND_FROM || "Bethesda Library <no-reply@yourdomain.com>";
+    process.env.RESEND_FROM ||
+    "Bethesda Lending Library <no-reply@bethesdalendinglibrary.com>";
 
   const { data, error } = await resend.emails.send({
     from,
@@ -33,10 +57,40 @@ async function sendEmail({ to, subject, html }) {
   return data;
 }
 
+/* ===============================
+   EMAIL TEMPLATE WRAPPER
+================================ */
+
+function renderBrandedEmail({ title, content, showPickupInfo = false }) {
+  return `
+    <div style="background:#f8fafc; padding:24px; font-family:Arial, sans-serif;">
+      <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:8px; overflow:hidden;">
+        
+        <!-- Header -->
+        <div style="background:#0b4ea2; padding:20px; text-align:center;">
+          <img src="${BETHESDA_LOGO}" alt="Bethesda Toy Lending Library" style="max-width:160px;" />
+        </div>
+
+        <!-- Body -->
+        <div style="padding:24px; color:#1f2937;">
+          <h2 style="color:#0b4ea2;">${title}</h2>
+          ${content}
+          ${showPickupInfo ? PICKUP_INFO_HTML : ""}
+        </div>
+
+        <!-- Footer -->
+        <div style="background:#f1f5f9; padding:16px; font-size:12px; text-align:center; color:#475569;">
+          <p style="margin:0;">Bethesda Toy Lending Library</p>
+          <p style="margin:4px 0;">Supporting children & families through play</p>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
+
 /* ======================================================
-   ROUTE: /email/reservation-created
-   → Called when a parent submits a reservation
-   → Sends email to parent + admin
+   ROUTE: Reservation Created
 ====================================================== */
 app.post("/email/reservation-created", async (req, res) => {
   try {
@@ -53,7 +107,6 @@ app.post("/email/reservation-created", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Email to parent
     const pickupLine = preferredDay
       ? `Preferred pick-up day: <strong>${preferredDay}</strong>.`
       : "We will contact you with pick-up details soon.";
@@ -61,53 +114,55 @@ app.post("/email/reservation-created", async (req, res) => {
     await sendEmail({
       to: parentEmail,
       subject: `Reservation received for "${itemName}"`,
-      html: `
-        <h2>Thank you for your reservation</h2>
-        <p>Hi ${parentName || "there"},</p>
-        <p>We have received your reservation for <strong>${itemName}</strong> ${
-        childName ? `for ${childName}` : ""
-      }.</p>
-        <p>${pickupLine}</p>
-        ${
-          note
-            ? `<p><strong>Your note:</strong><br />${String(note)
-                .replace(/\n/g, "<br />")
-                .trim()}</p>`
-            : ""
-        }
-        <p>We will send another email when this toy is <strong>ready for pickup</strong>.</p>
-        <p>– Bethesda Toy Lending Library</p>
-      `,
+      html: renderBrandedEmail({
+        title: "Reservation Received",
+        showPickupInfo: true,
+        content: `
+          <p>Hi ${parentName || "there"},</p>
+          <p>
+            We have received your reservation for
+            <strong>${itemName}</strong>
+            ${childName ? `for ${childName}` : ""}.
+          </p>
+          <p>${pickupLine}</p>
+          ${
+            note
+              ? `<p><strong>Your note:</strong><br />${String(note)
+                  .replace(/\n/g, "<br />")
+                  .trim()}</p>`
+              : ""
+          }
+          <p>
+            We will send another email when this toy is
+            <strong>ready for pickup</strong>.
+          </p>
+        `,
+      }),
     });
 
-    // Email to admin as well
     if (process.env.ADMIN_EMAIL) {
       await sendEmail({
         to: process.env.ADMIN_EMAIL,
         subject: `New reservation: "${itemName}"`,
         html: `
-          <h2>New Reservation</h2>
+          <h3>New Reservation</h3>
           <p><strong>Parent:</strong> ${parentName || "N/A"} (${parentEmail})</p>
           <p><strong>Child:</strong> ${childName || "N/A"}</p>
           <p><strong>Item:</strong> ${itemName}</p>
-          <p><strong>Preferred pick-up:</strong> ${
-            preferredDay || "N/A"
-          }</p>
+          <p><strong>Preferred pickup:</strong> ${preferredDay || "N/A"}</p>
         `,
       });
     }
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Error sending reservation email:", err);
+    console.error("Reservation email error:", err);
     res.status(500).json({ error: "Failed to send email" });
   }
 });
 
 /* ======================================================
-   ROUTE: /email/waitlist-created
-   → Called when a parent joins the waitlist
-   → Sends email to parent + admin
+   ROUTE: Waitlist Created
 ====================================================== */
 app.post("/email/waitlist-created", async (req, res) => {
   try {
@@ -117,28 +172,31 @@ app.post("/email/waitlist-created", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Email to parent
     await sendEmail({
       to: parentEmail,
       subject: `Waitlist request for "${itemName}" received`,
-      html: `
-        <h2>You're on the waitlist!</h2>
-        <p>Hi ${parentName || "there"},</p>
-        <p>We have added you to the waitlist for <strong>${itemName}</strong> ${
-          childName ? `for ${childName}` : ""
-        }.</p>
-        <p>We will email you again when this item becomes available.</p>
-        <p>– Bethesda Toy Lending Library</p>
-      `,
+      html: renderBrandedEmail({
+        title: "Waitlist Confirmation",
+        content: `
+          <p>Hi ${parentName || "there"},</p>
+          <p>
+            You have been added to the waitlist for
+            <strong>${itemName}</strong>
+            ${childName ? `for ${childName}` : ""}.
+          </p>
+          <p>
+            We will contact you as soon as this toy becomes available.
+          </p>
+        `,
+      }),
     });
 
-    // Email to admin
     if (process.env.ADMIN_EMAIL) {
       await sendEmail({
         to: process.env.ADMIN_EMAIL,
         subject: `New waitlist request: "${itemName}"`,
         html: `
-          <h2>New Waitlist Entry</h2>
+          <h3>New Waitlist Entry</h3>
           <p><strong>Parent:</strong> ${parentName || "N/A"} (${parentEmail})</p>
           <p><strong>Child:</strong> ${childName || "N/A"}</p>
           <p><strong>Item:</strong> ${itemName}</p>
@@ -148,15 +206,14 @@ app.post("/email/waitlist-created", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Error sending waitlist email:", err);
+    console.error("Waitlist email error:", err);
     res.status(500).json({ error: "Failed to send email" });
   }
 });
 
 /* ======================================================
-   ROUTE: /email/status-updated
-   → Called when admin changes reservation status
-   → Sends parent a clear update (special for "Ready for Pickup")
+   ROUTE: Status Updated
+   ❌ NO email when status = "On Loan"
 ====================================================== */
 app.post("/email/status-updated", async (req, res) => {
   try {
@@ -173,67 +230,61 @@ app.post("/email/status-updated", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
+    // ❌ Skip On Loan emails
+    if (newStatus === "On Loan") {
+      return res.json({ skipped: true });
+    }
+
     let subject = `Update for "${itemName}"`;
-    let bodyHtml = "";
+    let html = "";
 
     if (newStatus === "Ready for Pickup") {
       subject = `🎉 "${itemName}" is ready for pickup`;
-      bodyHtml = `
-        <h2>Your toy is ready!</h2>
-        <p>Hi ${parentName || "there"},</p>
-        <p>Good news! The toy <strong>${itemName}</strong>${
-        childName ? ` for ${childName}` : ""
-      } is now <strong>ready for pickup</strong>.</p>
-        ${
-          preferredDay
-            ? `<p>You requested: <strong>${preferredDay}</strong>. If this date no longer works, please contact us.</p>`
-            : ""
-        }
-        <p>You can pick it up at the Bethesda Toy Lending Library during our regular open hours.</p>
-        <p>– Bethesda Toy Lending Library</p>
-      `;
-    } else if (newStatus === "On Loan") {
-      bodyHtml = `
-        <h2>Reservation Update</h2>
-        <p>Hi ${parentName || "there"},</p>
-        <p>Your reservation for <strong>${itemName}</strong> is now marked as <strong>On Loan</strong>.</p>
-        <p>We hope ${childName || "your child"} enjoys the toy!</p>
-        <p>– Bethesda Toy Lending Library</p>
-      `;
+      html = renderBrandedEmail({
+        title: "Your Toy is Ready for Pickup",
+        showPickupInfo: true,
+        content: `
+          <p>Hi ${parentName || "there"},</p>
+          <p>
+            Great news! <strong>${itemName}</strong>
+            ${childName ? `for ${childName}` : ""} is now
+            <strong>ready for pickup</strong>.
+          </p>
+          ${
+            preferredDay
+              ? `<p>You requested pickup on <strong>${preferredDay}</strong>.</p>`
+              : ""
+          }
+          <p>Please bring this email with you when you come.</p>
+        `,
+      });
     } else if (newStatus === "Returned") {
-      bodyHtml = `
-        <h2>Thank you!</h2>
-        <p>Hi ${parentName || "there"},</p>
-        <p>We have marked <strong>${itemName}</strong> as <strong>Returned</strong> in our system.</p>
-        <p>Thank you for using the Toy Lending Library. We hope to see you again soon.</p>
-        <p>– Bethesda Toy Lending Library</p>
-      `;
-    } else {
-      // Generic fallback
-      bodyHtml = `
-        <h2>Reservation Update</h2>
-        <p>Hi ${parentName || "there"},</p>
-        <p>The status of your reservation for <strong>${itemName}</strong> has been updated to <strong>${newStatus}</strong>.</p>
-        <p>If you have any questions, please contact us.</p>
-        <p>– Bethesda Toy Lending Library</p>
-      `;
+      html = renderBrandedEmail({
+        title: "Thank You",
+        content: `
+          <p>Hi ${parentName || "there"},</p>
+          <p>
+            We have marked <strong>${itemName}</strong> as
+            <strong>Returned</strong>.
+          </p>
+          <p>Thank you for using the Toy Lending Library!</p>
+        `,
+      });
     }
 
-    await sendEmail({
-      to: parentEmail,
-      subject,
-      html: bodyHtml,
-    });
-
+    await sendEmail({ to: parentEmail, subject, html });
     res.json({ ok: true });
   } catch (err) {
-    console.error("Error sending status email:", err);
+    console.error("Status email error:", err);
     res.status(500).json({ error: "Failed to send email" });
   }
 });
 
-// 6) Start server
+/* ===============================
+   START SERVER
+================================ */
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`Email service running on http://localhost:${PORT}`);
+  console.log(`📧 Email service running on port ${PORT}`);
 });
