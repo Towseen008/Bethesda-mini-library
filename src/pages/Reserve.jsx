@@ -208,21 +208,98 @@ export default function Reserve() {
       )}
 
       <form
-        onSubmit={isOnLoan ? submitWaitlist : submitReservation}
-        className="space-y-4"
-      >
-        {/* FORM FIELDS UNCHANGED */}
-        <button
-          type="submit"
-          className={`w-full py-2 rounded text-white font-semibold animate-fadeUp ${
-            isOnLoan
-              ? "bg-purple-600 hover:bg-purple-700"
-              : "bg-bethDeepBlue hover:bg-bethLightBlue"
-          }`}
-        >
-          {isOnLoan ? "Join Waitlist" : "Submit Reservation"}
-        </button>
-      </form>
+  onSubmit={isOnLoan ? submitWaitlist : submitReservation}
+  className="space-y-4"
+>
+  {/* Parent Name */}
+  <div>
+    <label className="block text-sm font-medium mb-1">
+      Parent / Guardian Name
+    </label>
+    <input
+      type="text"
+      name="parentName"
+      value={formData.parentName}
+      onChange={handleChange}
+      required
+      className="w-full border rounded px-3 py-2"
+    />
+  </div>
+
+  {/* Parent Email */}
+  <div>
+    <label className="block text-sm font-medium mb-1">
+      Parent Email
+    </label>
+    <input
+      type="email"
+      name="parentEmail"
+      value={formData.parentEmail}
+      onChange={handleChange}
+      required
+      className="w-full border rounded px-3 py-2"
+    />
+  </div>
+
+  {/* Child Name */}
+  <div>
+    <label className="block text-sm font-medium mb-1">
+      Child Name
+    </label>
+    <input
+      type="text"
+      name="childName"
+      value={formData.childName}
+      onChange={handleChange}
+      required
+      className="w-full border rounded px-3 py-2"
+    />
+  </div>
+
+  {/* Preferred Day (only if reserving) */}
+  {!isOnLoan && (
+    <div>
+      <label className="block text-sm font-medium mb-1">
+        Preferred Pickup Day
+      </label>
+      <input
+        type="date"
+        name="preferredDay"
+        min={today}
+        value={formData.preferredDay}
+        onChange={handleChange}
+        required
+        className="w-full border rounded px-3 py-2"
+      />
+    </div>
+  )}
+
+  {/* Optional Note */}
+  <div>
+    <label className="block text-sm font-medium mb-1">
+      Notes (optional)
+    </label>
+    <textarea
+      name="note"
+      value={formData.note}
+      onChange={handleChange}
+      rows={3}
+      className="w-full border rounded px-3 py-2"
+    />
+  </div>
+
+  <button
+    type="submit"
+    className={`w-full py-2 rounded text-white font-semibold ${
+      isOnLoan
+        ? "bg-purple-600 hover:bg-purple-700"
+        : "bg-bethDeepBlue hover:bg-bethLightBlue"
+    }`}
+  >
+    {isOnLoan ? "Join Waitlist" : "Submit Reservation"}
+  </button>
+</form>
+
     </div>
   );
 }

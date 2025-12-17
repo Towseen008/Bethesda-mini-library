@@ -31,11 +31,10 @@ import {
   RESERVATION_STATUS_OPTIONS,
   INITIAL_FORM_STATE,
 } from "../components/admin/constants";
-
 import { downloadCSV } from "../components/admin/helpers";
 
 /* ======================================================
-   EMAIL API BASE (ENV SAFE)
+   EMAIL API BASE (RENDER + CORS SAFE)
 ====================================================== */
 const EMAIL_API_BASE =
   import.meta.env.VITE_EMAIL_API_URL ||
@@ -44,29 +43,24 @@ const EMAIL_API_BASE =
     : "https://bethesda-email-service.onrender.com");
 
 /* ======================================================
-   EMAIL HELPER (SINGLE SOURCE OF TRUTH)
+   EMAIL HELPER
 ====================================================== */
 const sendStatusEmail = async (payload) => {
   try {
-    const res = await fetch(`${EMAIL_API_BASE}/email/status-updated`, {
+    await fetch(`${EMAIL_API_BASE}/email/status-updated`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
-    const text = await res.text();
-    if (!res.ok) {
-      console.error("Status email API error:", res.status, text, payload);
-    }
   } catch (err) {
-    console.error("Status email network error:", err);
+    console.error("Status email error:", err);
   }
 };
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("add");
 
-  /* --------------------- ITEM STATE --------------------- */
+  /* ---------------- ITEMS ---------------- */
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -81,30 +75,31 @@ export default function Admin() {
   const itemsPerPage = 12;
   const [currentItemPage, setCurrentItemPage] = useState(1);
 
-  /* ----------------- RESERVATION STATE ------------------ */
+  /* ---------------- RESERVATIONS ---------------- */
   const [reservations, setReservations] = useState([]);
+  const [filteredReservations, setFilteredReservations] = useState([]);
   const [reservationSearchTerm, setReservationSearchTerm] = useState("");
   const [reservationStatusFilter, setReservationStatusFilter] = useState("");
-  const [filteredReservations, setFilteredReservations] = useState([]);
 
   const reservationsPerPage = 20;
   const [currentReservationPage, setCurrentReservationPage] = useState(1);
 
-  /* ------------------ WISHLIST STATE ------------------ */
+  /* ---------------- WISHLIST ---------------- */
   const [wishlist, setWishlist] = useState([]);
   const [filteredWishlist, setFilteredWishlist] = useState([]);
   const [wishlistSearch, setWishlistSearch] = useState("");
   const wishlistPerPage = 30;
   const [currentWishlistPage, setCurrentWishlistPage] = useState(1);
 
-  /* ------------------ ARCHIVE STATE ------------------ */
+  /* ---------------- ARCHIVE ---------------- */
   const [archives, setArchives] = useState([]);
   const [filteredArchives, setFilteredArchives] = useState([]);
   const [archiveSearch, setArchiveSearch] = useState("");
-  const archivePerPage = 30;
+
+  const archivePerPage = 20;
   const [currentArchivePage, setCurrentArchivePage] = useState(1);
 
-  /* ---------------- CONFIRM MODAL STATE ---------------- */
+  /* ---------------- CONFIRM MODAL ---------------- */
   const [confirmModal, setConfirmModal] = useState({
     open: false,
     mode: null,
@@ -116,7 +111,45 @@ export default function Admin() {
   const closeConfirm = () =>
     setConfirmModal({ open: false, mode: null, payload: null });
 
-  /* ------------------ INITIAL LOAD ------------------ */
+  /* ---------------- FORM HANDLERS ---------------- */
+  const handleChange = (e) =>
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+
+  const removeImage = (i) =>
+    setFormData((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, idx) => idx !== i),
+    }));
+
+  const handleImageUpload = async (e) => {
+    const files = e.target.files;
+    if (!files.length) return;
+
+    setUploading(true);
+    const urls = [];
+
+    for (let f of files) {
+      const data = new FormData();
+      data.append("file", f);
+      data.append(
+        "upload_preset",
+        import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+      );
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: "POST", body: data }
+      );
+
+      const json = await res.json();
+      urls.push(json.secure_url);
+    }
+
+    setFormData((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
+    setUploading(false);
+  };
+
+  /* ---------------- INITIAL LOAD ---------------- */
   useEffect(() => {
     fetchItems();
 
@@ -144,85 +177,286 @@ export default function Admin() {
     setFilteredItems(data);
   };
 
-  /* ---------------- STATUS UPDATE + EMAIL ---------------- */
-  const handleReservationStatus = async (reservation, newStatus) => {
-    try {
-      await updateDoc(doc(db, "reservations", reservation.id), {
-        status: newStatus,
-      });
+  /* ---------------- FILTER ITEMS ---------------- */
+  useEffect(() => {
+    let updated = [...items];
 
-      // backend already skips "On Loan"
-      if (newStatus !== "On Loan") {
-        await sendStatusEmail({
-          parentEmail: reservation.parentEmail,
-          parentName: reservation.parentName,
-          childName: reservation.childName,
-          itemName: reservation.itemName,
-          newStatus,
-          preferredDay: reservation.preferredDay || "",
-        });
-      }
+    if (categoryFilter)
+      updated = updated.filter((i) => i.category === categoryFilter);
 
-      const itemRef = doc(db, "items", reservation.itemId);
-      const snap = await getDoc(itemRef);
-      if (!snap.exists()) return;
+    if (itemSearchTerm)
+      updated = updated.filter((i) =>
+        i.name.toLowerCase().includes(itemSearchTerm.toLowerCase())
+      );
 
-      const item = snap.data();
-      const total = Number(item.totalQuantity ?? 0);
-      let quantity = Number(item.quantity ?? 0);
-      let status = item.status || "Available";
+    if (sortOption === "az")
+      updated.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sortOption === "za")
+      updated.sort((a, b) => b.name.localeCompare(a.name));
+    else
+      updated.sort(
+        (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+      );
 
-      if (newStatus === "On Loan") {
-        quantity = Math.max(0, quantity - 1);
-        status = quantity === 0 ? "On Loan" : "Available";
-      } else if (newStatus === "Returned") {
-        quantity = Math.min(total, quantity + 1);
-        status = "Available";
+    setFilteredItems(updated);
+    setCurrentItemPage(1);
+  }, [items, categoryFilter, itemSearchTerm, sortOption]);
 
-        await updateDoc(itemRef, { quantity, status });
+  /* ---------------- FILTER RESERVATIONS ---------------- */
+  useEffect(() => {
+    let updated = [...reservations];
 
-        await addDoc(collection(db, "archives"), {
-          itemId: reservation.itemId,
-          itemName: reservation.itemName,
-          parentName: reservation.parentName,
-          parentEmail: reservation.parentEmail,
-          childName: reservation.childName,
-          preferredDay: reservation.preferredDay || "",
-          note: reservation.note || "",
-          status: "Returned",
-          createdAt: reservation.createdAt || serverTimestamp(),
-          archivedAt: serverTimestamp(),
-        });
-
-        await deleteDoc(doc(db, "reservations", reservation.id));
-        fetchItems();
-        return;
-      }
-
-      await updateDoc(itemRef, { quantity, status });
-      fetchItems();
-    } catch (err) {
-      console.error("Error updating reservation status:", err);
+    if (reservationSearchTerm) {
+      const t = reservationSearchTerm.toLowerCase();
+      updated = updated.filter((r) =>
+        [r.itemName, r.parentName, r.childName]
+          .join(" ")
+          .toLowerCase()
+          .includes(t)
+      );
     }
+
+    if (reservationStatusFilter)
+      updated = updated.filter((r) => r.status === reservationStatusFilter);
+
+    updated.sort(
+      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+    );
+
+    setFilteredReservations(updated);
+    setCurrentReservationPage(1);
+  }, [reservations, reservationSearchTerm, reservationStatusFilter]);
+
+  /* ---------------- FILTER WISHLIST ---------------- */
+  useEffect(() => {
+    let updated = [...wishlist];
+
+    if (wishlistSearch) {
+      const t = wishlistSearch.toLowerCase();
+      updated = updated.filter((w) =>
+        [w.itemName, w.parentName, w.childName]
+          .join(" ")
+          .toLowerCase()
+          .includes(t)
+      );
+    }
+
+    updated.sort(
+      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+    );
+
+    setFilteredWishlist(updated);
+    setCurrentWishlistPage(1);
+  }, [wishlist, wishlistSearch]);
+
+  /* ---------------- FILTER ARCHIVE ---------------- */
+  useEffect(() => {
+    let updated = [...archives];
+
+    if (archiveSearch) {
+      const t = archiveSearch.toLowerCase();
+      updated = updated.filter((a) =>
+        [a.itemName, a.parentName, a.childName]
+          .join(" ")
+          .toLowerCase()
+          .includes(t)
+      );
+    }
+
+    updated.sort(
+      (a, b) => (b.archivedAt?.seconds || 0) - (a.archivedAt?.seconds || 0)
+    );
+
+    setFilteredArchives(updated);
+    setCurrentArchivePage(1);
+  }, [archives, archiveSearch]);
+
+  /* ---------------- ADD / EDIT / DELETE ITEM ---------------- */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await addDoc(collection(db, "items"), {
+      ...formData,
+      createdAt: serverTimestamp(),
+    });
+    setFormData(INITIAL_FORM_STATE);
+    fetchItems();
   };
 
-  /* ------------------- LOGOUT ------------------- */
+  const handleEdit = (item) => {
+    setEditingItem(item);
+    setFormData(item);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    await updateDoc(doc(db, "items", editingItem.id), formData);
+    setEditingItem(null);
+    setIsModalOpen(false);
+    setFormData(INITIAL_FORM_STATE);
+    fetchItems();
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this toy?")) return;
+    await deleteDoc(doc(db, "items", id));
+    fetchItems();
+  };
+
+  /* ---------------- CSV EXPORTS ---------------- */
+  const exportInventoryCSV = () =>
+    downloadCSV(
+      ["Name", "Category", "Age Group", "Status", "Available", "Total"],
+      filteredItems.map((i) => [
+        i.name,
+        i.category,
+        i.ageGroup,
+        i.status,
+        i.quantity,
+        i.totalQuantity,
+      ]),
+      "inventory.csv"
+    );
+
+  const exportReservationsCSV = () =>
+    downloadCSV(
+      ["Item", "Parent", "Email", "Child", "Status"],
+      filteredReservations.map((r) => [
+        r.itemName,
+        r.parentName,
+        r.parentEmail,
+        r.childName,
+        r.status,
+      ]),
+      "reservations.csv"
+    );
+
+  const exportWishlistCSV = () =>
+    downloadCSV(
+      ["Item", "Parent", "Email", "Child"],
+      filteredWishlist.map((w) => [
+        w.itemName,
+        w.parentName,
+        w.parentEmail,
+        w.childName,
+      ]),
+      "wishlist.csv"
+    );
+
+  const exportArchiveCSV = () =>
+    downloadCSV(
+      ["Item", "Parent", "Email", "Child", "Returned Date"],
+      filteredArchives.map((a) => [
+        a.itemName,
+        a.parentName,
+        a.parentEmail,
+        a.childName,
+        a.archivedAt?.toDate
+          ? a.archivedAt.toDate().toLocaleDateString()
+          : "N/A",
+      ]),
+      "archive.csv"
+    );
+
+  /* ---------------- CONFIRM MODAL ACTION ---------------- */
+  const handleConfirmAction = async () => {
+    const { mode, payload } = confirmModal;
+
+    if (!payload) return;
+
+    if (mode === "convertWishlist") {
+      await addDoc(collection(db, "reservations"), {
+        ...payload,
+        status: "Pending",
+        createdAt: payload.createdAt || serverTimestamp(),
+      });
+      await deleteDoc(doc(db, "wishlists", payload.id));
+    }
+
+    if (mode === "deleteWishlist") {
+      await deleteDoc(doc(db, "wishlists", payload.id));
+    }
+
+    if (mode === "restoreArchive") {
+      await addDoc(collection(db, "reservations"), {
+        ...payload,
+        status: "Pending",
+        createdAt: payload.createdAt || serverTimestamp(),
+      });
+      await deleteDoc(doc(db, "archives", payload.id));
+      setActiveTab("reservations");
+    }
+
+    if (mode === "deleteArchive") {
+      await deleteDoc(doc(db, "archives", payload.id));
+    }
+
+    closeConfirm();
+  };
+
+  /* ---------------- SUMMARY ---------------- */
+  const totalInventory = items.reduce(
+    (sum, i) => sum + (i.totalQuantity ?? 0),
+    0
+  );
+  const totalAvailable = items.reduce((sum, i) => sum + (i.quantity ?? 0), 0);
+  const totalLoaned = totalInventory - totalAvailable;
+  const pending = reservations.filter((r) => r.status === "Pending").length;
+  const ready = reservations.filter(
+    (r) => r.status === "Ready for Pickup"
+  ).length;
+  const waitlistCount = wishlist.length;
+
+  /* ---------------- LOGOUT ---------------- */
   const handleLogout = async () => {
     await signOut(auth);
     window.location.href = "/admin-login";
   };
 
-  /* ======================= RENDER ======================= */
+  /* ---------------- RESERVATION STATUS ---------------- */
+const handleReservationStatus = async (reservation, newStatus) => {
+  try {
+    // update reservation status
+    await updateDoc(doc(db, "reservations", reservation.id), {
+      status: newStatus,
+    });
 
+    // send email (skip On Loan if you prefer)
+    if (newStatus !== "On Loan") {
+      await sendStatusEmail({
+        parentEmail: reservation.parentEmail,
+        parentName: reservation.parentName,
+        childName: reservation.childName,
+        itemName: reservation.itemName,
+        newStatus,
+        preferredDay: reservation.preferredDay || "",
+      });
+    }
+
+  } catch (err) {
+    console.error("Failed to update reservation status:", err);
+  }
+};
+
+/* ---------------- DELETE RESERVATION ---------------- */
+const handleDeleteReservation = async (id) => {
+  try {
+    if (!window.confirm("Delete this reservation?")) return;
+    await deleteDoc(doc(db, "reservations", id));
+  } catch (err) {
+    console.error("Failed to delete reservation:", err);
+  }
+};
+
+
+  /* ======================= RENDER ======================= */
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-10">
-      {/* HEADER + LOGOUT */}
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-bethDeepBlue">Admin Dashboard</h2>
-
         <button
           onClick={handleLogout}
-          className="px-4 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 transition"
+          className="px-4 py-2 bg-red-600 text-white rounded"
         >
           Logout
         </button>
