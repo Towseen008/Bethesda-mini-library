@@ -172,10 +172,9 @@ export default function Home() {
           </h2>
 
           <p className="text-sm sm:text-lg lg:text-xl text-gray-200 mb-6 opacity-0 animate-heroFloat delay-[350ms] leading-relaxed">
-            Discover an engaging collection of educational toys designed to
-            support developmental growth and learning. Browse available items,
-            reserve them, and get notified when your resources are ready for
-            pickup.
+            A community resource supporting children’s learning, play, and development. 
+            Explore our collection of educational toys, 
+            reserve the ones that fit your child’s needs, and we’ll notify you when they’re ready for pickup.
           </p>
 
           <a
@@ -192,7 +191,7 @@ export default function Home() {
         id="available-toys"
         className="text-2xl font-bold mb-2 text-bethDeepBlue border-b pb-2 scroll-mt-24"
       >
-        Available Toys
+        Browse Our Toy Collection
       </h2>
 
       {/* SUMMARY + VIEW MODE */}
@@ -381,11 +380,11 @@ export default function Home() {
                   {item.name}
                 </h3>
 
-                <p className="text-xs text-gray-600 mb-1">
+                <p className="text-sm text-gray-600 mb-1">
                   Age Group: {item.ageGroup || "N/A"}
                 </p>
 
-                <p className="text-[11px] text-gray-500 mb-1">
+                <p className="text-sm text-gray-500 mb-1">
                   Category: {item.category || "N/A"}
                 </p>
 

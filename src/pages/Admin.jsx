@@ -34,11 +34,12 @@ import {
 import { downloadCSV } from "../components/admin/helpers";
 
 /* ======================================================
-   EMAIL API BASE (RENDER + CORS SAFE)
+   EMAIL API BASE (RENDER + LOCAL SAFE)
 ====================================================== */
+const isBrowser = typeof window !== "undefined";
 const EMAIL_API_BASE =
   import.meta.env.VITE_EMAIL_API_URL ||
-  (location.hostname === "localhost"
+  (isBrowser && window.location.hostname === "localhost"
     ? "http://localhost:4000"
     : "https://bethesda-email-service.onrender.com");
 
@@ -57,14 +58,41 @@ const sendStatusEmail = async (payload) => {
   }
 };
 
+/* ======================================================
+   INVENTORY HELPERS
+====================================================== */
+const decrementItemQuantity = async (itemId) => {
+  const ref = doc(db, "items", itemId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const { quantity = 0 } = snap.data();
+  if (quantity <= 0) return;
+
+  await updateDoc(ref, { quantity: quantity - 1 });
+};
+
+const incrementItemQuantity = async (itemId) => {
+  const ref = doc(db, "items", itemId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const { quantity = 0, totalQuantity = 0 } = snap.data();
+  if (quantity >= totalQuantity) return;
+
+  await updateDoc(ref, { quantity: quantity + 1 });
+};
+
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("add");
 
-  /* ---------------- ITEMS ---------------- */
+  /* --------------------- ITEM STATE --------------------- */
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
+
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [uploading, setUploading] = useState(false);
+
   const [editingItem, setEditingItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -75,43 +103,45 @@ export default function Admin() {
   const itemsPerPage = 12;
   const [currentItemPage, setCurrentItemPage] = useState(1);
 
-  /* ---------------- RESERVATIONS ---------------- */
+  /* ----------------- RESERVATION STATE ------------------ */
   const [reservations, setReservations] = useState([]);
-  const [filteredReservations, setFilteredReservations] = useState([]);
   const [reservationSearchTerm, setReservationSearchTerm] = useState("");
   const [reservationStatusFilter, setReservationStatusFilter] = useState("");
+  const [filteredReservations, setFilteredReservations] = useState([]);
 
   const reservationsPerPage = 20;
   const [currentReservationPage, setCurrentReservationPage] = useState(1);
 
-  /* ---------------- WISHLIST ---------------- */
+  /* ------------------ WISHLIST STATE ------------------ */
   const [wishlist, setWishlist] = useState([]);
   const [filteredWishlist, setFilteredWishlist] = useState([]);
   const [wishlistSearch, setWishlistSearch] = useState("");
   const wishlistPerPage = 30;
   const [currentWishlistPage, setCurrentWishlistPage] = useState(1);
 
-  /* ---------------- ARCHIVE ---------------- */
+  /* ------------------ ARCHIVE STATE ------------------ */
   const [archives, setArchives] = useState([]);
   const [filteredArchives, setFilteredArchives] = useState([]);
   const [archiveSearch, setArchiveSearch] = useState("");
-
   const archivePerPage = 20;
   const [currentArchivePage, setCurrentArchivePage] = useState(1);
 
-  /* ---------------- CONFIRM MODAL ---------------- */
+  /* ---------------- CONFIRM MODAL STATE ---------------- */
   const [confirmModal, setConfirmModal] = useState({
     open: false,
-    mode: null,
+    mode: null, // 'convertWishlist' | 'deleteWishlist' | 'restoreArchive' | 'deleteArchive'
     payload: null,
   });
 
-  const openConfirm = (mode, payload) =>
+  const openConfirm = (mode, payload) => {
     setConfirmModal({ open: true, mode, payload });
-  const closeConfirm = () =>
-    setConfirmModal({ open: false, mode: null, payload: null });
+  };
 
-  /* ---------------- FORM HANDLERS ---------------- */
+  const closeConfirm = () => {
+    setConfirmModal({ open: false, mode: null, payload: null });
+  };
+
+  /* ---------------- FORM CHANGE ------------------ */
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -121,6 +151,7 @@ export default function Admin() {
       images: prev.images.filter((_, idx) => idx !== i),
     }));
 
+  /* ---------------- CLOUDINARY UPLOAD ---------------- */
   const handleImageUpload = async (e) => {
     const files = e.target.files;
     if (!files.length) return;
@@ -137,7 +168,9 @@ export default function Admin() {
       );
 
       const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${
+          import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
+        }/image/upload`,
         { method: "POST", body: data }
       );
 
@@ -149,19 +182,21 @@ export default function Admin() {
     setUploading(false);
   };
 
-  /* ---------------- INITIAL LOAD ---------------- */
+  /* ------------------ INITIAL LOAD ------------------ */
   useEffect(() => {
     fetchItems();
 
-    const unsubRes = onSnapshot(collection(db, "reservations"), (snap) =>
-      setReservations(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-    const unsubWish = onSnapshot(collection(db, "wishlists"), (snap) =>
-      setWishlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-    const unsubArch = onSnapshot(collection(db, "archives"), (snap) =>
-      setArchives(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
+    const unsubRes = onSnapshot(collection(db, "reservations"), (snap) => {
+      setReservations(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubWish = onSnapshot(collection(db, "wishlists"), (snap) => {
+      setWishlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubArch = onSnapshot(collection(db, "archives"), (snap) => {
+      setArchives(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
 
     return () => {
       unsubRes();
@@ -177,7 +212,7 @@ export default function Admin() {
     setFilteredItems(data);
   };
 
-  /* ---------------- FILTER ITEMS ---------------- */
+  /* ------------------ FILTER ITEMS ------------------ */
   useEffect(() => {
     let updated = [...items];
 
@@ -189,8 +224,7 @@ export default function Admin() {
         i.name.toLowerCase().includes(itemSearchTerm.toLowerCase())
       );
 
-    if (sortOption === "az")
-      updated.sort((a, b) => a.name.localeCompare(b.name));
+    if (sortOption === "az") updated.sort((a, b) => a.name.localeCompare(b.name));
     else if (sortOption === "za")
       updated.sort((a, b) => b.name.localeCompare(a.name));
     else
@@ -209,10 +243,7 @@ export default function Admin() {
     if (reservationSearchTerm) {
       const t = reservationSearchTerm.toLowerCase();
       updated = updated.filter((r) =>
-        [r.itemName, r.parentName, r.childName]
-          .join(" ")
-          .toLowerCase()
-          .includes(t)
+        [r.itemName, r.parentName, r.childName].join(" ").toLowerCase().includes(t)
       );
     }
 
@@ -234,10 +265,7 @@ export default function Admin() {
     if (wishlistSearch) {
       const t = wishlistSearch.toLowerCase();
       updated = updated.filter((w) =>
-        [w.itemName, w.parentName, w.childName]
-          .join(" ")
-          .toLowerCase()
-          .includes(t)
+        [w.itemName, w.parentName, w.childName].join(" ").toLowerCase().includes(t)
       );
     }
 
@@ -256,10 +284,7 @@ export default function Admin() {
     if (archiveSearch) {
       const t = archiveSearch.toLowerCase();
       updated = updated.filter((a) =>
-        [a.itemName, a.parentName, a.childName]
-          .join(" ")
-          .toLowerCase()
-          .includes(t)
+        [a.itemName, a.parentName, a.childName].join(" ").toLowerCase().includes(t)
       );
     }
 
@@ -271,38 +296,170 @@ export default function Admin() {
     setCurrentArchivePage(1);
   }, [archives, archiveSearch]);
 
-  /* ---------------- ADD / EDIT / DELETE ITEM ---------------- */
+  /* --------------------- ADD ITEM ---------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const qty = Number(formData.quantity) || 0;
+    const totalQty = Number(formData.totalQuantity) || qty;
+
     await addDoc(collection(db, "items"), {
       ...formData,
+      quantity: qty,
+      totalQuantity: totalQty,
       createdAt: serverTimestamp(),
     });
+
     setFormData(INITIAL_FORM_STATE);
     fetchItems();
   };
 
+  /* --------------------- EDIT ITEM ---------------------- */
   const handleEdit = (item) => {
     setEditingItem(item);
-    setFormData(item);
+    setFormData({
+      name: item.name || "",
+      category: item.category || "",
+      ageGroup: item.ageGroup || "",
+      description: item.description || "",
+      images: item.images || [],
+      status: item.status || "Available",
+      quantity: item.quantity ?? 0,
+      totalQuantity: item.totalQuantity ?? item.quantity ?? 0,
+    });
     setIsModalOpen(true);
   };
 
   const handleSaveEdit = async () => {
-    await updateDoc(doc(db, "items", editingItem.id), formData);
+    const qty = Number(formData.quantity) || 0;
+    const totalQty = Number(formData.totalQuantity) || 0;
+
+    await updateDoc(doc(db, "items", editingItem.id), {
+      ...formData,
+      quantity: Math.min(qty, totalQty),
+      totalQuantity: totalQty,
+    });
+
     setEditingItem(null);
     setIsModalOpen(false);
     setFormData(INITIAL_FORM_STATE);
     fetchItems();
   };
 
+  /* ------------------- DELETE ITEM ------------------- */
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this toy?")) return;
     await deleteDoc(doc(db, "items", id));
     fetchItems();
   };
 
-  /* ---------------- CSV EXPORTS ---------------- */
+  /* ---------------- RESERVATION STATUS ---------------- */
+  const handleReservationStatus = async (reservation, newStatus) => {
+    try {
+      // Returned: archive + delete reservation + increment stock + (optional email allowed)
+      if (newStatus === "Returned") {
+        await incrementItemQuantity(reservation.itemId);
+
+        const { id, ...cleanReservation } = reservation;
+
+        await addDoc(collection(db, "archives"), {
+          ...cleanReservation,
+          status: "Returned",
+          archivedAt: serverTimestamp(),
+        });
+
+        await deleteDoc(doc(db, "reservations", reservation.id));
+
+        // send email for Returned (allowed)
+        await sendStatusEmail({
+          parentEmail: reservation.parentEmail,
+          parentName: reservation.parentName,
+          childName: reservation.childName,
+          itemName: reservation.itemName,
+          newStatus: "Returned",
+          preferredDay: reservation.preferredDay || "",
+        });
+
+        return;
+      }
+
+      // On Loan: decrement stock, but DO NOT email parent
+      if (newStatus === "On Loan") {
+        await decrementItemQuantity(reservation.itemId);
+      }
+
+      // Update reservation status in Firestore
+      await updateDoc(doc(db, "reservations", reservation.id), {
+        status: newStatus,
+      });
+
+      // Email for all statuses EXCEPT "On Loan"
+      if (newStatus !== "On Loan") {
+        await sendStatusEmail({
+          parentEmail: reservation.parentEmail,
+          parentName: reservation.parentName,
+          childName: reservation.childName,
+          itemName: reservation.itemName,
+          newStatus,
+          preferredDay: reservation.preferredDay || "",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to update reservation status:", err);
+    }
+  };
+
+  /* ---------------- DELETE RESERVATION ---------------- */
+  const handleDeleteReservation = async (id) => {
+    try {
+      if (!window.confirm("Delete this reservation?")) return;
+      await deleteDoc(doc(db, "reservations", id));
+    } catch (err) {
+      console.error("Failed to delete reservation:", err);
+    }
+  };
+
+  /* ----------- CONFIRM MODAL ACTION HANDLER ----------- */
+  const handleConfirmAction = async () => {
+    const { mode, payload } = confirmModal;
+    if (!mode || !payload) {
+      closeConfirm();
+      return;
+    }
+
+    // IMPORTANT: do NOT store the Firestore doc id inside the document
+    const { id, ...clean } = payload;
+
+    try {
+      if (mode === "convertWishlist") {
+        await addDoc(collection(db, "reservations"), {
+          ...clean,
+          status: "Pending",
+          createdAt: payload.createdAt || serverTimestamp(),
+        });
+        await deleteDoc(doc(db, "wishlists", id));
+        setActiveTab("reservations");
+      } else if (mode === "deleteWishlist") {
+        await deleteDoc(doc(db, "wishlists", id));
+      } else if (mode === "restoreArchive") {
+        await addDoc(collection(db, "reservations"), {
+          ...clean,
+          status: "Pending",
+          createdAt: payload.createdAt || serverTimestamp(),
+        });
+        await deleteDoc(doc(db, "archives", id));
+        setActiveTab("reservations");
+      } else if (mode === "deleteArchive") {
+        await deleteDoc(doc(db, "archives", id));
+      }
+    } catch (err) {
+      console.error("Error in confirm action:", err);
+    } finally {
+      closeConfirm();
+    }
+  };
+
+  /* ------------------- CSV EXPORTS ------------------- */
   const exportInventoryCSV = () =>
     downloadCSV(
       ["Name", "Category", "Age Group", "Status", "Available", "Total"],
@@ -319,12 +476,13 @@ export default function Admin() {
 
   const exportReservationsCSV = () =>
     downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Status"],
+      ["Item", "Parent", "Email", "Child", "Preferred Day", "Status"],
       filteredReservations.map((r) => [
         r.itemName,
         r.parentName,
         r.parentEmail,
         r.childName,
+        r.preferredDay,
         r.status,
       ]),
       "reservations.csv"
@@ -332,121 +490,52 @@ export default function Admin() {
 
   const exportWishlistCSV = () =>
     downloadCSV(
-      ["Item", "Parent", "Email", "Child"],
+      ["Item", "Parent", "Email", "Child", "Request Date"],
       filteredWishlist.map((w) => [
         w.itemName,
         w.parentName,
         w.parentEmail,
         w.childName,
+        w.createdAt?.toDate ? w.createdAt.toDate().toLocaleDateString() : "N/A",
       ]),
       "wishlist.csv"
     );
 
   const exportArchiveCSV = () =>
     downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Returned Date"],
+      ["Item", "Parent", "Email", "Child", "Preferred Day", "Returned Date"],
       filteredArchives.map((a) => [
         a.itemName,
         a.parentName,
         a.parentEmail,
         a.childName,
-        a.archivedAt?.toDate
-          ? a.archivedAt.toDate().toLocaleDateString()
-          : "N/A",
+        a.preferredDay || "",
+        a.archivedAt?.toDate ? a.archivedAt.toDate().toLocaleDateString() : "N/A",
       ]),
       "archive.csv"
     );
 
-  /* ---------------- CONFIRM MODAL ACTION ---------------- */
-  const handleConfirmAction = async () => {
-    const { mode, payload } = confirmModal;
+  /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
+  const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
 
-    if (!payload) return;
+  // Source of truth for "On Loan"
+  const totalLoaned = reservations.filter((r) => r.status === "On Loan").length;
 
-    if (mode === "convertWishlist") {
-      await addDoc(collection(db, "reservations"), {
-        ...payload,
-        status: "Pending",
-        createdAt: payload.createdAt || serverTimestamp(),
-      });
-      await deleteDoc(doc(db, "wishlists", payload.id));
-    }
+  const totalAvailable = Math.max(totalInventory - totalLoaned, 0);
 
-    if (mode === "deleteWishlist") {
-      await deleteDoc(doc(db, "wishlists", payload.id));
-    }
-
-    if (mode === "restoreArchive") {
-      await addDoc(collection(db, "reservations"), {
-        ...payload,
-        status: "Pending",
-        createdAt: payload.createdAt || serverTimestamp(),
-      });
-      await deleteDoc(doc(db, "archives", payload.id));
-      setActiveTab("reservations");
-    }
-
-    if (mode === "deleteArchive") {
-      await deleteDoc(doc(db, "archives", payload.id));
-    }
-
-    closeConfirm();
-  };
-
-  /* ---------------- SUMMARY ---------------- */
-  const totalInventory = items.reduce(
-    (sum, i) => sum + (i.totalQuantity ?? 0),
-    0
-  );
-  const totalAvailable = items.reduce((sum, i) => sum + (i.quantity ?? 0), 0);
-  const totalLoaned = totalInventory - totalAvailable;
   const pending = reservations.filter((r) => r.status === "Pending").length;
-  const ready = reservations.filter(
-    (r) => r.status === "Ready for Pickup"
-  ).length;
+  const ready = reservations.filter((r) => r.status === "Ready for Pickup").length;
   const waitlistCount = wishlist.length;
 
-  /* ---------------- LOGOUT ---------------- */
+  /* ------------------- LOGOUT ------------------- */
   const handleLogout = async () => {
-    await signOut(auth);
-    window.location.href = "/admin-login";
-  };
-
-  /* ---------------- RESERVATION STATUS ---------------- */
-const handleReservationStatus = async (reservation, newStatus) => {
-  try {
-    // update reservation status
-    await updateDoc(doc(db, "reservations", reservation.id), {
-      status: newStatus,
-    });
-
-    // send email (skip On Loan if you prefer)
-    if (newStatus !== "On Loan") {
-      await sendStatusEmail({
-        parentEmail: reservation.parentEmail,
-        parentName: reservation.parentName,
-        childName: reservation.childName,
-        itemName: reservation.itemName,
-        newStatus,
-        preferredDay: reservation.preferredDay || "",
-      });
+    try {
+      await signOut(auth);
+      window.location.href = "/admin-login";
+    } catch (err) {
+      console.error("Logout error:", err);
     }
-
-  } catch (err) {
-    console.error("Failed to update reservation status:", err);
-  }
-};
-
-/* ---------------- DELETE RESERVATION ---------------- */
-const handleDeleteReservation = async (id) => {
-  try {
-    if (!window.confirm("Delete this reservation?")) return;
-    await deleteDoc(doc(db, "reservations", id));
-  } catch (err) {
-    console.error("Failed to delete reservation:", err);
-  }
-};
-
+  };
 
   /* ======================= RENDER ======================= */
   return (
@@ -539,9 +628,7 @@ const handleDeleteReservation = async (id) => {
       {activeTab === "items" && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-2xl font-bold text-bethDeepBlue">
-              Existing Toys
-            </h3>
+            <h3 className="text-2xl font-bold text-bethDeepBlue">Existing Toys</h3>
             <button
               onClick={exportInventoryCSV}
               className="bg-green-600 text-white px-3 py-2 rounded text-sm"
@@ -611,9 +698,7 @@ const handleDeleteReservation = async (id) => {
       {activeTab === "reservations" && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-2xl font-bold text-bethDeepBlue">
-              Reservations
-            </h3>
+            <h3 className="text-2xl font-bold text-bethDeepBlue">Reservations</h3>
             <button
               onClick={exportReservationsCSV}
               className="bg-purple-600 text-white px-3 py-2 rounded text-sm"
@@ -679,9 +764,7 @@ const handleDeleteReservation = async (id) => {
 
           <Pagination
             currentPage={currentReservationPage}
-            totalPages={Math.ceil(
-              filteredReservations.length / reservationsPerPage
-            )}
+            totalPages={Math.ceil(filteredReservations.length / reservationsPerPage)}
             onPageChange={setCurrentReservationPage}
           />
         </div>
@@ -736,12 +819,8 @@ const handleDeleteReservation = async (id) => {
                     <WishlistRow
                       key={entry.id}
                       res={entry}
-                      onConvert={() =>
-                        openConfirm("convertWishlist", entry)
-                      }
-                      onDelete={() =>
-                        openConfirm("deleteWishlist", entry)
-                      }
+                      onConvert={() => openConfirm("convertWishlist", entry)}
+                      onDelete={() => openConfirm("deleteWishlist", entry)}
                     />
                   ))}
               </tbody>
@@ -750,9 +829,7 @@ const handleDeleteReservation = async (id) => {
 
           <Pagination
             currentPage={currentWishlistPage}
-            totalPages={Math.ceil(
-              filteredWishlist.length / wishlistPerPage
-            )}
+            totalPages={Math.ceil(filteredWishlist.length / wishlistPerPage)}
             onPageChange={setCurrentWishlistPage}
           />
         </div>
@@ -808,12 +885,8 @@ const handleDeleteReservation = async (id) => {
                     <ArchiveRow
                       key={entry.id}
                       entry={entry}
-                      onRestore={() =>
-                        openConfirm("restoreArchive", entry)
-                      }
-                      onDelete={() =>
-                        openConfirm("deleteArchive", entry)
-                      }
+                      onRestore={() => openConfirm("restoreArchive", entry)}
+                      onDelete={() => openConfirm("deleteArchive", entry)}
                     />
                   ))}
               </tbody>
@@ -861,7 +934,7 @@ const handleDeleteReservation = async (id) => {
         </div>
       )}
 
-      {/* CONFIRM MODAL (shared for wishlist/archive actions) */}
+      {/* CONFIRM MODAL */}
       <ConfirmModal
         open={confirmModal.open}
         title={

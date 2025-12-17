@@ -244,7 +244,7 @@ export default function Reserve() {
   {/* Child Name */}
   <div>
     <label className="block text-sm font-medium mb-1">
-      Child Name
+      Child Name Or Assigned Number
     </label>
     <input
       type="text"
