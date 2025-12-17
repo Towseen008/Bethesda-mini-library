@@ -19,7 +19,7 @@ const EMAIL_API_BASE =
   import.meta.env.VITE_EMAIL_API_URL ||
   (location.hostname === "localhost"
     ? "http://localhost:4000"
-    : "https://bethesda-email-service.onrender.com");
+    : "https://bethesda-mini-library.onrender.com");
 
 /* ======================================================
    EMAIL HELPER
