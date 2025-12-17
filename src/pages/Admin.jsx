@@ -34,21 +34,34 @@ import {
 
 import { downloadCSV } from "../components/admin/helpers";
 
+/* ======================================================
+   EMAIL API BASE (ENV SAFE)
+====================================================== */
+const EMAIL_API_BASE =
+  import.meta.env.VITE_EMAIL_API_URL ||
+  (location.hostname === "localhost"
+    ? "http://localhost:4000"
+    : "https://bethesda-email-service.onrender.com");
+
+/* ======================================================
+   EMAIL HELPER (SINGLE SOURCE OF TRUTH)
+====================================================== */
 const sendStatusEmail = async (payload) => {
   try {
-    await fetch(
-      `${import.meta.env.VITE_EMAIL_API_URL}/email/status-updated`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await fetch(`${EMAIL_API_BASE}/email/status-updated`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      console.error("Status email API error:", res.status, text, payload);
+    }
   } catch (err) {
-    console.error("Status email error:", err);
+    console.error("Status email network error:", err);
   }
 };
-
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("add");
@@ -56,10 +69,8 @@ export default function Admin() {
   /* --------------------- ITEM STATE --------------------- */
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
-
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [uploading, setUploading] = useState(false);
-
   const [editingItem, setEditingItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -96,38 +107,33 @@ export default function Admin() {
   /* ---------------- CONFIRM MODAL STATE ---------------- */
   const [confirmModal, setConfirmModal] = useState({
     open: false,
-    mode: null, // 'convertWishlist' | 'deleteWishlist' | 'restoreArchive' | 'deleteArchive'
+    mode: null,
     payload: null,
   });
 
-  const openConfirm = (mode, payload) => {
+  const openConfirm = (mode, payload) =>
     setConfirmModal({ open: true, mode, payload });
-  };
-
-  const closeConfirm = () => {
+  const closeConfirm = () =>
     setConfirmModal({ open: false, mode: null, payload: null });
-  };
 
   /* ------------------ INITIAL LOAD ------------------ */
   useEffect(() => {
     fetchItems();
 
-    const unsubscribeRes = onSnapshot(collection(db, "reservations"), (snap) => {
-      setReservations(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubscribeWish = onSnapshot(collection(db, "wishlists"), (snap) => {
-      setWishlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubscribeArchive = onSnapshot(collection(db, "archives"), (snap) => {
-      setArchives(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsubRes = onSnapshot(collection(db, "reservations"), (snap) =>
+      setReservations(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+    const unsubWish = onSnapshot(collection(db, "wishlists"), (snap) =>
+      setWishlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+    const unsubArch = onSnapshot(collection(db, "archives"), (snap) =>
+      setArchives(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
 
     return () => {
-      unsubscribeRes();
-      unsubscribeWish();
-      unsubscribeArchive();
+      unsubRes();
+      unsubWish();
+      unsubArch();
     };
   }, []);
 
@@ -138,262 +144,25 @@ export default function Admin() {
     setFilteredItems(data);
   };
 
-  /* ------------------ FILTER ITEMS ------------------ */
-  useEffect(() => {
-    let updated = [...items];
-
-    if (categoryFilter)
-      updated = updated.filter((i) => i.category === categoryFilter);
-
-    if (itemSearchTerm)
-      updated = updated.filter((i) =>
-        i.name.toLowerCase().includes(itemSearchTerm.toLowerCase())
-      );
-
-    if (sortOption === "az") updated.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sortOption === "za")
-      updated.sort((a, b) => b.name.localeCompare(a.name));
-    else
-      updated.sort(
-        (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
-      );
-
-    setFilteredItems(updated);
-    setCurrentItemPage(1);
-  }, [items, categoryFilter, itemSearchTerm, sortOption]);
-
-  /* ---------------- FILTER RESERVATIONS ------------- */
-  useEffect(() => {
-    let updated = [...reservations];
-
-    // Search
-    if (reservationSearchTerm) {
-      const t = reservationSearchTerm.toLowerCase();
-      updated = updated.filter((r) => {
-        const dateStr = r.createdAt?.toDate
-          ? r.createdAt.toDate().toLocaleDateString().toLowerCase()
-          : "";
-        return (
-          r.itemName?.toLowerCase().includes(t) ||
-          r.parentName?.toLowerCase().includes(t) ||
-          r.childName?.toLowerCase().includes(t) ||
-          dateStr.includes(t)
-        );
-      });
-    }
-
-    // Status filter
-    if (reservationStatusFilter)
-      updated = updated.filter((r) => r.status === reservationStatusFilter);
-
-    // newest → oldest by createdAt
-    updated.sort(
-      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
-    );
-
-    setFilteredReservations(updated);
-    setCurrentReservationPage(1);
-  }, [reservations, reservationSearchTerm, reservationStatusFilter]);
-
-  /* ---------------- FILTER + SORT WISHLIST ------------- */
-  useEffect(() => {
-    let updated = [...wishlist];
-
-    // Search
-    if (wishlistSearch) {
-      const term = wishlistSearch.toLowerCase();
-      updated = updated.filter((w) => {
-        const dateStr = w.createdAt?.toDate
-          ? w.createdAt.toDate().toLocaleDateString().toLowerCase()
-          : "";
-        return (
-          w.itemName?.toLowerCase().includes(term) ||
-          w.parentName?.toLowerCase().includes(term) ||
-          w.childName?.toLowerCase().includes(term) ||
-          dateStr.includes(term)
-        );
-      });
-    }
-
-    // newest → oldest by createdAt
-    updated.sort(
-      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
-    );
-
-    setFilteredWishlist(updated);
-    setCurrentWishlistPage(1);
-  }, [wishlist, wishlistSearch]);
-
-  /* ---------------- FILTER + SORT ARCHIVES ------------- */
-  useEffect(() => {
-    let updated = [...archives];
-
-    // Search
-    if (archiveSearch) {
-      const term = archiveSearch.toLowerCase();
-      updated = updated.filter((a) => {
-        const dateStr = a.archivedAt?.toDate
-          ? a.archivedAt.toDate().toLocaleDateString().toLowerCase()
-          : "";
-        return (
-          a.itemName?.toLowerCase().includes(term) ||
-          a.parentName?.toLowerCase().includes(term) ||
-          a.childName?.toLowerCase().includes(term) ||
-          dateStr.includes(term)
-        );
-      });
-    }
-
-    // newest → oldest by archivedAt
-    updated.sort(
-      (a, b) => (b.archivedAt?.seconds || 0) - (a.archivedAt?.seconds || 0)
-    );
-
-    setFilteredArchives(updated);
-    setCurrentArchivePage(1);
-  }, [archives, archiveSearch]);
-
-  /* ---------------- FORM CHANGE ------------------ */
-  const handleChange = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  const removeImage = (i) =>
-    setFormData((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, idx) => idx !== i),
-    }));
-
-  /* ---------------- CLOUDINARY UPLOAD ---------------- */
-  const handleImageUpload = async (e) => {
-    const files = e.target.files;
-    if (!files.length) return;
-
-    setUploading(true);
-    const urls = [];
-
-    for (let f of files) {
-      const data = new FormData();
-      data.append("file", f);
-      data.append(
-        "upload_preset",
-        import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
-      );
-
-      const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${
-          import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
-        }/image/upload`,
-        { method: "POST", body: data }
-      );
-
-      const json = await res.json();
-      urls.push(json.secure_url);
-    }
-
-    setFormData((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
-    setUploading(false);
-  };
-
-  /* --------------------- ADD ITEM ---------------------- */
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const qty = Number(formData.quantity) || 0;
-    const totalQty = Number(formData.totalQuantity) || qty;
-
-    await addDoc(collection(db, "items"), {
-      ...formData,
-      quantity: qty,
-      totalQuantity: totalQty,
-      createdAt: serverTimestamp(),
-    });
-
-    fetchItems();
-    setFormData(INITIAL_FORM_STATE);
-    alert("Toy added successfully!");
-  };
-
-  /* --------------------- EDIT ITEM ---------------------- */
-  const handleEdit = (item) => {
-    setEditingItem(item);
-    setFormData({
-      name: item.name || "",
-      category: item.category || "",
-      ageGroup: item.ageGroup || "",
-      description: item.description || "",
-      images: item.images || [],
-      status: item.status || "Available",
-      quantity: item.quantity ?? 0,
-      totalQuantity: item.totalQuantity ?? item.quantity ?? 0,
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleSaveEdit = async () => {
-    const qty = Number(formData.quantity);
-    const totalQty = Number(formData.totalQuantity);
-
-    await updateDoc(doc(db, "items", editingItem.id), {
-      ...formData,
-      quantity: Math.min(qty, totalQty),
-      totalQuantity: totalQty,
-    });
-
-    fetchItems();
-    setIsModalOpen(false);
-    setEditingItem(null);
-    setFormData(INITIAL_FORM_STATE);
-  };
-
-  /* ------------------- DELETE ITEM ------------------- */
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this toy?")) return;
-    await deleteDoc(doc(db, "items", id));
-    fetchItems();
-  };
-
-  /* ------------------- STATUS EMAIL HELPER ------------------- */
-  const sendStatusEmail = (reservation, newStatus) => {
-    if (!reservation?.parentEmail) return;
-
-    fetch(
-      `${import.meta.env.VITE_EMAIL_API_URL}/email/status-updated`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parentEmail: reservation.parentEmail,
-          parentName: reservation.parentName,
-          childName: reservation.childName,
-          itemName: reservation.itemName,
-          newStatus,
-          preferredDay: reservation.preferredDay || "",
-        }),
-      }
-    ).catch((err) =>
-      console.error("Email service error (status-updated):", err)
-    );
-  };
-
-
-
-  /* ----------- RESERVATION STATUS UPDATE + AUTO-ARCHIVE ----------- */
+  /* ---------------- STATUS UPDATE + EMAIL ---------------- */
   const handleReservationStatus = async (reservation, newStatus) => {
     try {
-      const resRef = doc(db, "reservations", reservation.id);
-      await updateDoc(resRef, { status: newStatus });
-      
-      // 📧 Send email ONLY for Ready for Pickup
-      if (newStatus === "Ready for Pickup") {
+      await updateDoc(doc(db, "reservations", reservation.id), {
+        status: newStatus,
+      });
+
+      // backend already skips "On Loan"
+      if (newStatus !== "On Loan") {
         await sendStatusEmail({
           parentEmail: reservation.parentEmail,
           parentName: reservation.parentName,
           childName: reservation.childName,
           itemName: reservation.itemName,
           newStatus,
+          preferredDay: reservation.preferredDay || "",
         });
       }
 
-      // Fetch item
       const itemRef = doc(db, "items", reservation.itemId);
       const snap = await getDoc(itemRef);
       if (!snap.exists()) return;
@@ -401,22 +170,17 @@ export default function Admin() {
       const item = snap.data();
       const total = Number(item.totalQuantity ?? 0);
       let quantity = Number(item.quantity ?? 0);
-      let itemStatus = item.status || "Available";
+      let status = item.status || "Available";
 
       if (newStatus === "On Loan") {
         quantity = Math.max(0, quantity - 1);
-        itemStatus = quantity === 0 ? "On Loan" : "Available";
+        status = quantity === 0 ? "On Loan" : "Available";
       } else if (newStatus === "Returned") {
-        // Increase inventory, set Available, archive, remove from reservations
         quantity = Math.min(total, quantity + 1);
-        itemStatus = "Available";
+        status = "Available";
 
-        await updateDoc(itemRef, {
-          quantity,
-          status: itemStatus,
-        });
+        await updateDoc(itemRef, { quantity, status });
 
-        // Move to archives collection
         await addDoc(collection(db, "archives"), {
           itemId: reservation.itemId,
           itemName: reservation.itemName,
@@ -430,179 +194,22 @@ export default function Admin() {
           archivedAt: serverTimestamp(),
         });
 
-        await deleteDoc(resRef);
-
-        // 🔔 send status-updated email (Returned)
-        sendStatusEmail(reservation, newStatus);
-
+        await deleteDoc(doc(db, "reservations", reservation.id));
         fetchItems();
         return;
       }
 
-      // Pending / Ready for Pickup: inventory unchanged except maybe for Ready?
-      await updateDoc(itemRef, {
-        quantity,
-        status: itemStatus,
-      });
-
-      // send status-updated email for all other status changes
-      sendStatusEmail(reservation, newStatus);
-
+      await updateDoc(itemRef, { quantity, status });
       fetchItems();
     } catch (err) {
       console.error("Error updating reservation status:", err);
     }
   };
 
-  const handleDeleteReservation = async (id) => {
-    if (!window.confirm("Delete reservation?")) return;
-    await deleteDoc(doc(db, "reservations", id));
-  };
-
-  /* ----------- CONFIRM MODAL ACTION HANDLER ----------- */
-  const handleConfirmAction = async () => {
-    const { mode, payload } = confirmModal;
-    if (!mode || !payload) {
-      closeConfirm();
-      return;
-    }
-
-    try {
-      if (mode === "convertWishlist") {
-        // Move to reservations as Pending
-        await addDoc(collection(db, "reservations"), {
-          itemId: payload.itemId,
-          itemName: payload.itemName,
-          parentName: payload.parentName,
-          parentEmail: payload.parentEmail,
-          childName: payload.childName,
-          preferredDay: "",
-          note: payload.note || "",
-          status: "Pending",
-          createdAt: payload.createdAt || serverTimestamp(),
-        });
-
-        await deleteDoc(doc(db, "wishlists", payload.id));
-      } else if (mode === "deleteWishlist") {
-        await deleteDoc(doc(db, "wishlists", payload.id));
-      } else if (mode === "restoreArchive") {
-        // Restore with same original data → Pending
-        await addDoc(collection(db, "reservations"), {
-          itemId: payload.itemId,
-          itemName: payload.itemName,
-          parentName: payload.parentName,
-          parentEmail: payload.parentEmail,
-          childName: payload.childName,
-          preferredDay: payload.preferredDay || "",
-          note: payload.note || "",
-          status: "Pending",
-          createdAt: payload.createdAt || serverTimestamp(),
-        });
-
-        await deleteDoc(doc(db, "archives", payload.id));
-
-        // Switch to Reservations tab
-        setActiveTab("reservations");
-      } else if (mode === "deleteArchive") {
-        await deleteDoc(doc(db, "archives", payload.id));
-      }
-    } catch (err) {
-      console.error("Error in confirm action:", err);
-    } finally {
-      closeConfirm();
-    }
-  };
-
-  /* ------------------- CSV EXPORTS ------------------- */
-  const exportInventoryCSV = () => {
-    downloadCSV(
-      ["Name", "Category", "Age Group", "Status", "Available", "Total"],
-      filteredItems.map((i) => [
-        i.name,
-        i.category,
-        i.ageGroup,
-        i.status,
-        i.quantity,
-        i.totalQuantity,
-      ]),
-      "inventory.csv"
-    );
-  };
-
-  const exportReservationsCSV = () => {
-    downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Preferred Day", "Status"],
-      filteredReservations.map((r) => [
-        r.itemName,
-        r.parentName,
-        r.parentEmail,
-        r.childName,
-        r.preferredDay,
-        r.status,
-      ]),
-      "reservations.csv"
-    );
-  };
-
-  const exportWishlistCSV = () => {
-    downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Request Date"],
-      filteredWishlist.map((w) => [
-        w.itemName,
-        w.parentName,
-        w.parentEmail,
-        w.childName,
-        w.createdAt?.toDate
-          ? w.createdAt.toDate().toLocaleDateString()
-          : "N/A",
-      ]),
-      "wishlist.csv"
-    );
-  };
-
-  const exportArchiveCSV = () => {
-    downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Preferred Day", "Status", "Returned Date"],
-      filteredArchives.map((a) => [
-        a.itemName,
-        a.parentName,
-        a.parentEmail,
-        a.childName,
-        a.preferredDay || "",
-        a.status || "Returned",
-        a.archivedAt?.toDate
-          ? a.archivedAt.toDate().toLocaleDateString()
-          : "N/A",
-      ]),
-      "archives.csv"
-    );
-  };
-
-  /* ------------------- SUMMARY COUNTS ------------------- */
-  const totalInventory = items.reduce(
-    (sum, item) => sum + (item.totalQuantity ?? 0),
-    0
-  );
-  const totalAvailable = items.reduce(
-    (sum, item) => sum + (item.quantity ?? 0),
-    0
-  );
-  const totalLoaned = totalInventory - totalAvailable;
-
-  const pending = reservations.filter((res) => res.status === "Pending").length;
-  const ready = reservations.filter(
-    (res) => res.status === "Ready for Pickup"
-  ).length;
-  const waitlistCount = wishlist.length;
-
   /* ------------------- LOGOUT ------------------- */
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      window.location.href = "/admin-login";
-    } catch (err) {
-      console.error("Logout error:", err);
-    }
+    await signOut(auth);
+    window.location.href = "/admin-login";
   };
 
   /* ======================= RENDER ======================= */
