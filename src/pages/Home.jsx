@@ -384,7 +384,7 @@ export default function Home() {
                   Age Group: {item.ageGroup || "N/A"}
                 </p>
 
-                <p className="text-sm text-gray-500 mb-1">
+                <p className="text-sm text-gray-600 mb-1">
                   Category: {item.category || "N/A"}
                 </p>
 
