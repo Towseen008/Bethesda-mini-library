@@ -3,10 +3,13 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-import heroImage from "../assets/Bethesda_NiagaraBuilding.jpg";
 
 import SkeletonCard from "../components/SkeletonCard";
 import Pagination from "../components/Pagination";
+
+// ✅ Cloudinary Hero Image
+const HERO_IMAGE_URL =
+  "https://res.cloudinary.com/towson008/image/upload/v1765994963/ocjqdjdaizh8elydfk2o.jpg";
 
 export default function Home() {
   const [items, setItems] = useState([]);
@@ -16,7 +19,7 @@ export default function Home() {
   const [filterOption, setFilterOption] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const itemsPerPage = 9;
+  const itemsPerPage = 12;
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState("grid");
 
@@ -46,7 +49,6 @@ export default function Home() {
   useEffect(() => {
     let updated = [...items];
 
-    // Pending is treated as Available for parents
     updated = updated.map((i) => ({
       ...i,
       status: i.status === "Pending" ? "Available" : i.status,
@@ -114,7 +116,6 @@ export default function Home() {
     if (section) section.scrollIntoView({ behavior: "smooth" });
   };
 
-  /* ---------- Active filter chips ---------- */
   const activeChips = [];
 
   if (searchTerm.trim()) {
@@ -145,7 +146,6 @@ export default function Home() {
     setFilterOption("all");
   };
 
-  /* ---------- Loading Skeleton ---------- */
   if (loading)
     return (
       <div className="max-w-6xl mx-auto px-4 py-6">
@@ -161,25 +161,31 @@ export default function Home() {
     <div className="max-w-6xl mx-auto px-4 py-4 space-y-6">
       {/* HERO SECTION */}
       <div
-        className="relative w-full h-[60vh] sm:h-[70vh] lg:h-[80vh] parallax-bg flex items-center justify-center"
-        style={{ backgroundImage: `url(${heroImage})` }}
+        className="relative w-full h-[60vh] sm:h-[70vh] lg:h-[80vh] min-h-[420px] parallax-bg flex items-center justify-center"
+        style={{ backgroundImage: `url(${HERO_IMAGE_URL})` }}
       >
+        {/* SEO helper for background image */}
+        <img
+          src={HERO_IMAGE_URL}
+          alt="Bethesda Lending Library building supporting children and families in Niagara"
+          className="hidden"
+        />
+
         <div className="absolute inset-0 bg-black/50"></div>
 
         <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-3xl">
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 opacity-0 animate-heroFloat delay-[150ms] leading-tight">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 opacity-0 animate-heroFloat delay-[150ms] leading-tight px-2">
             Welcome To The Toy Lending Library
-          </h2>
+          </h1>
 
           <p className="text-sm sm:text-lg lg:text-xl text-gray-200 mb-6 opacity-0 animate-heroFloat delay-[350ms] leading-relaxed">
-            A community resource supporting children’s learning, play, and development. 
-            Explore our collection of educational toys, 
-            reserve the ones that fit your child’s needs, and we’ll notify you when they’re ready for pickup.
+            Explore our collection of educational toys, reserve the ones that fit
+            your child’s needs, and we’ll notify you when they’re ready for pickup.
           </p>
 
           <a
             href="#available-toys"
-            className="bg-bethDeepBlue hover:bg-bethLightBlue text-white font-semibold px-8 py-3 rounded-lg shadow-lg opacity-0 animate-heroFloat delay-[550ms]"
+            className="bg-bethDeepBlue hover:bg-bethLightBlue text-white font-semibold px-6 sm:px-8 py-3 rounded-lg shadow-lg opacity-0 animate-heroFloat delay-[550ms] w-full sm:w-auto"
           >
             Browse Available Toys
           </a>
@@ -254,7 +260,8 @@ export default function Home() {
               <option value="age:2 to 5">2–5 years</option>
               <option value="age:2 to 10">2–10 years</option>
               <option value="age:6 to 10">6–10 years</option>
-              <option value="age:9+">9+ years</option>
+              <option value="age:10 to 13">10-13 years</option>
+              <option value="age:14+">14+ years</option>
             </optgroup>
 
             <optgroup label="Availability">
@@ -340,9 +347,9 @@ export default function Home() {
                   Age Group: {item.ageGroup || "N/A"}
                 </p>
 
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-sm text-gray-600 mb-2">
                   Category:{" "}
-                  <span className="font-semibold">{item.category || "N/A"}</span>
+                  <span >{item.category || "N/A"}</span>
                 </p>
 
                 <span

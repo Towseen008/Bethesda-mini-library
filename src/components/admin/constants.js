@@ -13,7 +13,7 @@ export const CATEGORY_OPTIONS = [
   "Others",
 ];
 
-export const AGE_GROUP_OPTIONS = ["All Age", "2 to 5", "2 to 10", "6 to 10", "9+"];
+export const AGE_GROUP_OPTIONS = ["All Age", "2 to 5", "2 to 10", "6 to 10","10 to 13","14+"];
 
 export const ITEM_STATUS_OPTIONS = ["Available", "Pending", "On Loan"];
 

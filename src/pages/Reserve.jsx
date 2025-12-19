@@ -22,7 +22,7 @@ const EMAIL_API_BASE =
     : "https://bethesda-mini-library.onrender.com");
 
 /* ======================================================
-   EMAIL HELPER
+   EMAIL HELPER (NON-BLOCKING SAFE)
 ====================================================== */
 const sendEmail = async (endpoint, payload) => {
   try {
@@ -32,9 +32,9 @@ const sendEmail = async (endpoint, payload) => {
       body: JSON.stringify(payload),
     });
 
-    const text = await res.text();
     if (!res.ok) {
-      console.error("Email API error:", res.status, text, payload);
+      const text = await res.text();
+      console.error("Email API error:", res.status, text);
     }
   } catch (err) {
     console.error("Email service network error:", err);
@@ -47,6 +47,7 @@ export default function Reserve() {
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false); // ✅ prevent double submit
 
   const [formData, setFormData] = useState({
     parentName: "",
@@ -81,7 +82,9 @@ export default function Reserve() {
   ----------------------------------------------------------- */
   const submitReservation = async (e) => {
     e.preventDefault();
-    if (!item) return;
+    if (!item || submitting) return;
+
+    setSubmitting(true);
 
     try {
       await addDoc(collection(db, "reservations"), {
@@ -96,8 +99,13 @@ export default function Reserve() {
         createdAt: serverTimestamp(),
       });
 
-      // 🔔 Email (non-blocking)
-      await sendEmail("/email/reservation-created", {
+      // ✅ Navigate immediately
+      navigate("/confirmation", {
+        state: { type: "reservation", itemName: item.name },
+      });
+
+      // 🔔 Fire-and-forget email (DO NOT await)
+      sendEmail("/email/reservation-created", {
         parentEmail: formData.parentEmail,
         parentName: formData.parentName,
         childName: formData.childName,
@@ -105,13 +113,10 @@ export default function Reserve() {
         preferredDay: formData.preferredDay || "Not specified",
         note: formData.note || "",
       });
-
-      navigate("/confirmation", {
-        state: { type: "reservation", itemName: item.name },
-      });
     } catch (err) {
       console.error("Error submitting reservation:", err);
       alert("Error creating reservation.");
+      setSubmitting(false);
     }
   };
 
@@ -120,7 +125,9 @@ export default function Reserve() {
   ----------------------------------------------------------- */
   const submitWaitlist = async (e) => {
     e.preventDefault();
-    if (!item) return;
+    if (!item || submitting) return;
+
+    setSubmitting(true);
 
     try {
       await addDoc(collection(db, "wishlists"), {
@@ -134,21 +141,23 @@ export default function Reserve() {
         createdAt: serverTimestamp(),
       });
 
-      // 🔔 Email (non-blocking)
-      await sendEmail("/email/waitlist-created", {
+      // ✅ Navigate immediately
+      navigate("/confirmation", {
+        state: { type: "waitlist", itemName: item.name },
+      });
+
+      // 🔔 Fire-and-forget email
+      sendEmail("/email/waitlist-created", {
         parentEmail: formData.parentEmail,
         parentName: formData.parentName,
         childName: formData.childName,
         itemName: item.name,
         preferredDay: "Waitlist request",
       });
-
-      navigate("/confirmation", {
-        state: { type: "waitlist", itemName: item.name },
-      });
     } catch (err) {
       console.error("Error submitting waitlist:", err);
       alert("Error adding to waitlist.");
+      setSubmitting(false);
     }
   };
 
@@ -170,8 +179,7 @@ export default function Reserve() {
     <div className="max-w-xl mx-auto p-6 bg-white shadow rounded">
       {/* UI BELOW IS UNCHANGED */}
       <h2 className="text-2xl font-bold text-bethDeepBlue mb-4 animate-fadeUp">
-        {isOnLoan ? "Join Waitlist" : "Reserve Toy"}{" "}
-        <span className="font-semibold"> </span>For: {item.name}
+        {isOnLoan ? "Join Waitlist" : "Reserve Toy"} For: {item.name}
       </h2>
 
       {item.images?.length > 0 && (
@@ -197,21 +205,11 @@ export default function Reserve() {
         </span>
       </p>
 
-      {isOnLoan && (
-        <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 rounded mb-6 text-sm animate-fadeUp">
-          This toy is currently on loan. You may join the waitlist.
-          <br />
-          <span className="text-xs italic text-gray-700">
-            Waitlist requests require final approval by Admin.
-          </span>
-        </div>
-      )}
-
       <form
-  onSubmit={isOnLoan ? submitWaitlist : submitReservation}
-  className="space-y-4"
->
-  {/* Parent Name */}
+        onSubmit={isOnLoan ? submitWaitlist : submitReservation}
+        className="space-y-4"
+      >
+         {/* Parent Name */}
   <div>
     <label className="block text-sm font-medium mb-1">
       Parent / Guardian Name
@@ -287,19 +285,23 @@ export default function Reserve() {
       className="w-full border rounded px-3 py-2"
     />
   </div>
-
-  <button
-    type="submit"
-    className={`w-full py-2 rounded text-white font-semibold ${
-      isOnLoan
-        ? "bg-purple-600 hover:bg-purple-700"
-        : "bg-bethDeepBlue hover:bg-bethLightBlue"
-    }`}
-  >
-    {isOnLoan ? "Join Waitlist" : "Submit Reservation"}
-  </button>
-</form>
-
+        {/* Button just disabled during submit */}
+        <button
+          type="submit"
+          disabled={submitting}
+          className={`w-full py-2 rounded text-white font-semibold ${
+            isOnLoan
+              ? "bg-purple-600 hover:bg-purple-700"
+              : "bg-bethDeepBlue hover:bg-bethLightBlue"
+          }`}
+        >
+          {submitting
+            ? "Submitting..."
+            : isOnLoan
+            ? "Join Waitlist"
+            : "Submit Reservation"}
+        </button>
+      </form>
     </div>
   );
 }
