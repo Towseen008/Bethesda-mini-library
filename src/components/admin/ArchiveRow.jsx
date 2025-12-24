@@ -12,23 +12,32 @@ export default function ArchiveRow({ entry, onRestore, onDelete }) {
       {/* Item */}
       <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
         {entry.itemName}
-        </td>
-        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-        {entry.parentName}
-        </td>
-        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-        {entry.parentEmail}
-        </td>
-        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-        {entry.childName}
-        </td>
-        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-        Returned
-        </td>
-        <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
-        {entry.archivedAt?.toDate?.().toLocaleDateString() ?? "N/A"}
-        </td>
+      </td>
 
+      {/* Parent */}
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.parentName}
+      </td>
+
+      {/* Email */}
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.parentEmail}
+      </td>
+
+      {/* Child */}
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {entry.childName}
+      </td>
+
+      {/* Preferred / Status */}
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        Returned
+      </td>
+
+      {/* Returned Date */}
+      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+        {returnedDate}
+      </td>
 
       {/* Actions */}
       <td className="p-2 border">

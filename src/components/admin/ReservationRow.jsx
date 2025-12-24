@@ -1,39 +1,124 @@
 // src/components/admin/ReservationRow.jsx
 
+import { useState, useEffect } from "react";
 import { badgeColor } from "./helpers";
 import { RESERVATION_STATUS_OPTIONS } from "./constants";
 
-export default function ReservationRow({ res, onStatus, onDelete }) {
-  const status = res.status || "Pending"; // Safe fallback
+export default function ReservationRow({
+  res,
+  onStatus,
+  onMoveToWaitlist,
+  onMoveToArchive,
+  onDelete,
+  onUpdateBagNo,        // saves after confirmation
+  onConfirmBagChange,   // opens ConfirmModal
+}) {
+  const status = res.status || "Pending";
 
-  // Format preferredDay safely
+  // ⚠️ NOTE:
+  // We intentionally do NOT disable Bag No editing when "On Loan"
+  // Actions dropdown is still disabled below
+  const actionsDisabled = status === "On Loan";
+
   const preferred = res.preferredDay
     ? new Date(res.preferredDay).toLocaleDateString()
     : "—";
 
+  /* ---------------- BAG NO EDIT STATE ---------------- */
+  const [editingBag, setEditingBag] = useState(false);
+  const [bagDraft, setBagDraft] = useState(res.bagNo || "");
+
+  // Keep local state in sync if Firestore updates
+  useEffect(() => {
+    setBagDraft(res.bagNo || "");
+  }, [res.bagNo]);
+
   return (
     <tr className="hover:bg-gray-50">
-      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+      {/* ITEM */}
+      <td className="p-2 border whitespace-nowrap">
         {res.itemName}
       </td>
 
+      {/* PARENT NAME */}
       <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
         {res.parentName}
       </td>
 
-      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+      {/* PARENT EMAIL */}
+      <td className="p-2 border whitespace-nowrap">
         {res.parentEmail}
       </td>
 
+      {/* CHILD NAME */}
       <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
         {res.childName}
       </td>
 
-      <td className="p-2 border truncate whitespace-nowrap max-w-[140px]">
+      {/* PREFERRED DAY */}
+      <td className="p-2 border whitespace-nowrap">
         {preferred}
       </td>
 
-      <td className="p-2 border">
+      {/* 👜 BAG NO (EDIT → CONFIRM → SAVE) */}
+      <td className="p-2 border whitespace-nowrap">
+        {!editingBag ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm">
+              {res.bagNo || "—"}
+            </span>
+
+            {/* ✅ Edit is ALWAYS visible */}
+            <button
+              onClick={() => setEditingBag(true)}
+              className="text-xs text-blue-600 underline"
+            >
+              Edit
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={bagDraft}
+              onChange={(e) => setBagDraft(e.target.value)}
+              className="border p-1 text-xs rounded w-20"
+              autoFocus
+            />
+
+            <button
+              onClick={() => {
+                const trimmed = bagDraft.trim();
+
+                // Only confirm if value actually changed
+                if (trimmed !== (res.bagNo || "")) {
+                  onConfirmBagChange(res, trimmed, () => {
+                    onUpdateBagNo(res, trimmed);
+                  });
+                }
+
+                setEditingBag(false);
+              }}
+              className="text-xs bg-green-600 text-white px-2 py-1 rounded"
+            >
+              Save
+            </button>
+
+            <button
+              onClick={() => {
+                setBagDraft(res.bagNo || "");
+                setEditingBag(false);
+              }}
+              className="text-xs px-2 py-1 border rounded"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </td>
+
+      {/* STATUS BADGE */}
+      <td className="p-2 border whitespace-nowrap">
         <span
           className={`px-2 py-1 text-xs rounded-full ${badgeColor(status)}`}
         >
@@ -41,7 +126,9 @@ export default function ReservationRow({ res, onStatus, onDelete }) {
         </span>
       </td>
 
-      <td className="p-2 border flex gap-1">
+      {/* ACTIONS */}
+      <td className="p-2 border flex gap-2 items-center">
+        {/* STATUS DROPDOWN */}
         <select
           value={status}
           onChange={(e) => onStatus(res, e.target.value)}
@@ -52,12 +139,29 @@ export default function ReservationRow({ res, onStatus, onDelete }) {
           ))}
         </select>
 
-        <button
-          onClick={() => onDelete(res.id)}
-          className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+        {/* ACTIONS DROPDOWN (still disabled when On Loan) */}
+        <select
+          defaultValue=""
+          disabled={actionsDisabled}
+          onChange={(e) => {
+            const action = e.target.value;
+            e.target.value = "";
+
+            if (action === "waitlist") onMoveToWaitlist(res);
+            if (action === "archive") onMoveToArchive(res, "Archived");
+            if (action === "delete") onDelete(res);
+          }}
+          className={`border p-1 text-xs rounded bg-white ${
+            actionsDisabled ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
-          Delete
-        </button>
+          <option value="" disabled>
+            {actionsDisabled ? "On Loan" : "Actions"}
+          </option>
+          <option value="waitlist">Move to Waitlist</option>
+          <option value="archive">Move to Archive</option>
+          <option value="delete">Delete (Archive)</option>
+        </select>
       </td>
     </tr>
   );

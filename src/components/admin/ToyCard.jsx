@@ -13,9 +13,8 @@ export default function ToyCard({ item, onEdit, onDelete }) {
       <h3 className="font-semibold text-bethDeepBlue truncate">{item.name}</h3>
       <p className="text-sm">Category: {item.category}</p>
       <p className="text-sm">Age: {item.ageGroup}</p>
-
-      <p className="text-sm font-semibold">Qty Available: {item.quantity}</p>
-      <p className="text-xs text-gray-600">
+      <p className="text-sm">Qty Available: {item.quantity}</p>
+      <p className="text-sm">
         Total Inventory: {item.totalQuantity}
       </p>
 

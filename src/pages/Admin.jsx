@@ -129,7 +129,10 @@ export default function Admin() {
   /* ---------------- CONFIRM MODAL STATE ---------------- */
   const [confirmModal, setConfirmModal] = useState({
     open: false,
-    mode: null, // 'convertWishlist' | 'deleteWishlist' | 'restoreArchive' | 'deleteArchive'
+    mode: null,
+    // 'convertWishlist' | 'deleteWishlist' | 'restoreArchive' | 'deleteArchive'
+    // 'moveResToWaitlist' | 'moveResToArchive' | 'deleteReservation'
+    // ✅ NEW: 'confirmBagChange'
     payload: null,
   });
 
@@ -353,24 +356,54 @@ export default function Admin() {
     fetchItems();
   };
 
+  /* ======================================================
+     ✅ BAG NO UPDATE (called ONLY after confirmation)
+  ======================================================= */
+  const handleUpdateBagNo = async (reservation, bagNo) => {
+    try {
+      await updateDoc(doc(db, "reservations", reservation.id), {
+        bagNo: bagNo || null,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("Failed to update bag number:", err);
+    }
+  };
+
+  /* ======================================================
+     ✅ NEW: CONFIRM BAG NO CHANGE (non-IT friendly)
+  ======================================================= */
+  const confirmBagNoChange = (reservation, newBagNo, onConfirmSave) => {
+    setConfirmModal({
+      open: true,
+      mode: "confirmBagChange",
+      payload: {
+        reservation,
+        newBagNo,
+        onConfirmSave,
+      },
+    });
+  };
+
   /* ---------------- RESERVATION STATUS ---------------- */
   const handleReservationStatus = async (reservation, newStatus) => {
     try {
-      // Returned: archive + delete reservation + increment stock + (optional email allowed)
+      // Returned: archive + delete reservation + increment stock + email
       if (newStatus === "Returned") {
         await incrementItemQuantity(reservation.itemId);
 
-        const { id, ...cleanReservation } = reservation;
+        // ✅ keep bagNo in archive; reservation doc is deleted (bag is freed)
+        const { id, bagNo, ...cleanReservation } = reservation;
 
         await addDoc(collection(db, "archives"), {
           ...cleanReservation,
+          bagNo: bagNo || null,
           status: "Returned",
           archivedAt: serverTimestamp(),
         });
 
         await deleteDoc(doc(db, "reservations", reservation.id));
 
-        // send email for Returned (allowed)
         await sendStatusEmail({
           parentEmail: reservation.parentEmail,
           parentName: reservation.parentName,
@@ -388,7 +421,7 @@ export default function Admin() {
         await decrementItemQuantity(reservation.itemId);
       }
 
-      // Update reservation status in Firestore
+      // Update reservation status
       await updateDoc(doc(db, "reservations", reservation.id), {
         status: newStatus,
       });
@@ -409,14 +442,22 @@ export default function Admin() {
     }
   };
 
-  /* ---------------- DELETE RESERVATION ---------------- */
-  const handleDeleteReservation = async (id) => {
-    try {
-      if (!window.confirm("Delete this reservation?")) return;
-      await deleteDoc(doc(db, "reservations", id));
-    } catch (err) {
-      console.error("Failed to delete reservation:", err);
-    }
+  /* ======================================================
+     RESERVATION ACTIONS (NOW CONFIRM MODAL, NO window.confirm)
+  ======================================================= */
+
+  // Delete action should still move to Archive (Delete (Archive))
+  const handleDeleteReservation = (reservation) => {
+    openConfirm("deleteReservation", reservation);
+  };
+
+  const moveReservationToWaitlist = (reservation) => {
+    openConfirm("moveResToWaitlist", reservation);
+  };
+
+  const moveReservationToArchive = (reservation, reason = "Archived") => {
+    // Pass reason through payload so confirm handler can store it
+    openConfirm("moveResToArchive", { ...reservation, archiveReason: reason });
   };
 
   /* ----------- CONFIRM MODAL ACTION HANDLER ----------- */
@@ -427,11 +468,60 @@ export default function Admin() {
       return;
     }
 
+    // ✅ NEW: Bag change confirmation
+    if (mode === "confirmBagChange") {
+      try {
+        if (typeof payload.onConfirmSave === "function") {
+          payload.onConfirmSave();
+        }
+      } catch (err) {
+        console.error("Error confirming bag change:", err);
+      } finally {
+        closeConfirm();
+      }
+      return;
+    }
+
     // IMPORTANT: do NOT store the Firestore doc id inside the document
     const { id, ...clean } = payload;
 
     try {
-      if (mode === "convertWishlist") {
+      // ===== NEW: Reservations -> Waitlist =====
+      if (mode === "moveResToWaitlist") {
+        await addDoc(collection(db, "wishlists"), {
+          ...clean,
+          createdAt: payload.createdAt || serverTimestamp(),
+        });
+        await deleteDoc(doc(db, "reservations", id));
+      }
+
+      // ===== NEW: Reservations -> Archive (manual archive) =====
+      else if (mode === "moveResToArchive") {
+        const reason = payload.archiveReason || "Archived";
+
+        // remove archiveReason from document clean (so it doesn't duplicate if you don't want it)
+        const { archiveReason, ...cleanNoReason } = payload;
+
+        await addDoc(collection(db, "archives"), {
+          ...cleanNoReason,
+          archivedAt: serverTimestamp(),
+          archiveReason: reason,
+        });
+        await deleteDoc(doc(db, "reservations", id));
+      }
+
+      // ===== NEW: Reservation delete (still archives) =====
+      else if (mode === "deleteReservation") {
+        await addDoc(collection(db, "archives"), {
+          ...clean,
+          archivedAt: serverTimestamp(),
+          archiveReason: "Deleted",
+        });
+        await deleteDoc(doc(db, "reservations", id));
+      }
+
+      // ===== Existing wishlist/archive actions (unchanged) =====
+      else if (mode === "convertWishlist") {
         await addDoc(collection(db, "reservations"), {
           ...clean,
           status: "Pending",
@@ -476,13 +566,14 @@ export default function Admin() {
 
   const exportReservationsCSV = () =>
     downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Preferred Day", "Status"],
+      ["Item", "Parent", "Email", "Child", "Preferred Day", "Bag No", "Status"],
       filteredReservations.map((r) => [
         r.itemName,
         r.parentName,
         r.parentEmail,
         r.childName,
         r.preferredDay,
+        r.bagNo || "",
         r.status,
       ]),
       "reservations.csv"
@@ -501,19 +592,20 @@ export default function Admin() {
       "wishlist.csv"
     );
 
-  const exportArchiveCSV = () =>
-    downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Preferred Day", "Returned Date"],
-      filteredArchives.map((a) => [
-        a.itemName,
-        a.parentName,
-        a.parentEmail,
-        a.childName,
-        a.preferredDay || "",
-        a.archivedAt?.toDate ? a.archivedAt.toDate().toLocaleDateString() : "N/A",
-      ]),
-      "archive.csv"
-    );
+ const exportArchiveCSV = () =>
+  downloadCSV(
+    ["Item", "Parent", "Email", "Child", "Status", "Returned Date"],
+    filteredArchives.map((a) => [
+      a.itemName,
+      a.parentName,
+      a.parentEmail,
+      a.childName,
+      "Returned",
+      a.archivedAt?.toDate ? a.archivedAt.toDate().toLocaleDateString() : "N/A",
+    ]),
+    "archive.csv"
+  );
+
 
   /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
   const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
@@ -670,7 +762,7 @@ export default function Admin() {
           </div>
 
           {/* TOY GRID */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:flex-row sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredItems
               .slice(
                 (currentItemPage - 1) * itemsPerPage,
@@ -739,6 +831,7 @@ export default function Admin() {
                   <th className="p-2 border">Email</th>
                   <th className="p-2 border">Child</th>
                   <th className="p-2 border">Preferred Day</th>
+                  <th className="p-2 border">Bag No</th>
                   <th className="p-2 border">Status</th>
                   <th className="p-2 border">Actions</th>
                 </tr>
@@ -755,7 +848,11 @@ export default function Admin() {
                       key={r.id}
                       res={r}
                       onStatus={handleReservationStatus}
+                      onMoveToWaitlist={moveReservationToWaitlist}
+                      onMoveToArchive={moveReservationToArchive}
                       onDelete={handleDeleteReservation}
+                      onUpdateBagNo={handleUpdateBagNo}
+                      onConfirmBagChange={confirmBagNoChange}
                     />
                   ))}
               </tbody>
@@ -866,12 +963,12 @@ export default function Admin() {
               <thead className="bg-bethLightGray">
                 <tr>
                   <th className="p-2 border">Item</th>
-                  <th className="p-2 border">Parent</th>
-                  <th className="p-2 border">Email</th>
-                  <th className="p-2 border">Child</th>
-                  <th className="p-2 border">Preferred Day</th>
-                  <th className="p-2 border">Returned Date</th>
-                  <th className="p-2 border">Actions</th>
+                    <th className="p-2 border">Parent</th>
+                    <th className="p-2 border">Email</th>
+                    <th className="p-2 border">Child</th>
+                    <th className="p-2 border">Status</th>
+                    <th className="p-2 border">Returned Date</th>
+                    <th className="p-2 border">Actions</th>
                 </tr>
               </thead>
 
@@ -946,6 +1043,14 @@ export default function Admin() {
             ? "Restore Reservation"
             : confirmModal.mode === "deleteArchive"
             ? "Delete Archived Record"
+            : confirmModal.mode === "moveResToWaitlist"
+            ? "Move Reservation to Waitlist"
+            : confirmModal.mode === "moveResToArchive"
+            ? "Archive Reservation"
+            : confirmModal.mode === "deleteReservation"
+            ? "Delete Reservation"
+            : confirmModal.mode === "confirmBagChange"
+            ? "Confirm Bag Number Change"
             : "Confirm Action"
         }
         message={
@@ -957,11 +1062,20 @@ export default function Admin() {
             ? "Restore this archived reservation back into the Reservations list as Pending?"
             : confirmModal.mode === "deleteArchive"
             ? "Permanently delete this archived record? This cannot be undone."
+            : confirmModal.mode === "moveResToWaitlist"
+            ? "Move this reservation to the waitlist?"
+            : confirmModal.mode === "moveResToArchive"
+            ? "Move this reservation to the archive?"
+            : confirmModal.mode === "deleteReservation"
+            ? "Delete this reservation? It will be moved to Archive."
+            : confirmModal.mode === "confirmBagChange"
+            ? `Are you sure you want to change the bag number to "${confirmModal.payload?.newBagNo || ""}"?`
             : ""
         }
         confirmLabel={
           confirmModal.mode === "deleteWishlist" ||
-          confirmModal.mode === "deleteArchive"
+          confirmModal.mode === "deleteArchive" ||
+          confirmModal.mode === "deleteReservation"
             ? "Delete"
             : "Confirm"
         }

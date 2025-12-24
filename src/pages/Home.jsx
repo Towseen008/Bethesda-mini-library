@@ -11,6 +11,30 @@ import Pagination from "../components/Pagination";
 const HERO_IMAGE_URL =
   "https://res.cloudinary.com/towson008/image/upload/v1765994963/ocjqdjdaizh8elydfk2o.jpg";
 
+/* ======================================================
+   WEEK KEY HELPER (changes once per week)
+====================================================== */
+const getWeekKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const firstDayOfYear = new Date(year, 0, 1);
+  const pastDays = (now - firstDayOfYear) / (1000 * 60 * 60 * 24);
+  const weekNumber = Math.ceil((pastDays + firstDayOfYear.getDay() + 1) / 7);
+  return `${year}-W${weekNumber}`;
+};
+
+/* ======================================================
+   SHUFFLE HELPER
+====================================================== */
+const shuffleArray = (array) => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 export default function Home() {
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
@@ -33,8 +57,36 @@ export default function Home() {
           ...doc.data(),
         }));
 
-        setItems(itemsData);
-        setFilteredItems(itemsData);
+        // ✅ WEEKLY STABLE RANDOM ORDER
+        const weekKey = getWeekKey();
+        const savedWeek = localStorage.getItem("toyOrderWeek");
+        const savedOrder = localStorage.getItem("toyOrder");
+
+        let finalItems = [];
+
+        if (savedWeek === weekKey && savedOrder) {
+          const orderIds = JSON.parse(savedOrder);
+          finalItems = orderIds
+            .map((id) => itemsData.find((item) => item.id === id))
+            .filter(Boolean);
+
+          // If new items were added and not in saved order, append them
+          const missing = itemsData.filter(
+            (it) => !orderIds.includes(it.id)
+          );
+          if (missing.length) finalItems = [...finalItems, ...missing];
+        } else {
+          const shuffled = shuffleArray(itemsData);
+          localStorage.setItem(
+            "toyOrder",
+            JSON.stringify(shuffled.map((i) => i.id))
+          );
+          localStorage.setItem("toyOrderWeek", weekKey);
+          finalItems = shuffled;
+        }
+
+        setItems(finalItems);
+        setFilteredItems(finalItems);
       } catch (error) {
         console.error("Error fetching items:", error);
       } finally {
@@ -348,8 +400,7 @@ export default function Home() {
                 </p>
 
                 <p className="text-sm text-gray-600 mb-2">
-                  Category:{" "}
-                  <span >{item.category || "N/A"}</span>
+                  Category: <span>{item.category || "N/A"}</span>
                 </p>
 
                 <span
@@ -415,7 +466,7 @@ export default function Home() {
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={handlePageChange}
-        showFirstLast={true} 
+        showFirstLast={true}
       />
     </div>
   );
