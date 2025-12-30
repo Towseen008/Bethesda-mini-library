@@ -49,7 +49,7 @@ export default function AboutUs() {
 
         <p className="text-gray-700 leading-relaxed">
           Our collection supports fine motor skills, sensory play, cognitive
-          learning, and social interaction—helping children learn through
+          learning, and social interaction; helping children learn through
           meaningful play.
         </p>
       </section>

@@ -69,7 +69,13 @@ const decrementItemQuantity = async (itemId) => {
   const { quantity = 0 } = snap.data();
   if (quantity <= 0) return;
 
-  await updateDoc(ref, { quantity: quantity - 1 });
+  // status auto-sync + consistent casing
+  const newQty = quantity - 1;
+
+  await updateDoc(ref, {
+    quantity: newQty,
+    status: newQty === 0 ? "On Loan" : "Available",
+  });
 };
 
 const incrementItemQuantity = async (itemId) => {
@@ -80,7 +86,13 @@ const incrementItemQuantity = async (itemId) => {
   const { quantity = 0, totalQuantity = 0 } = snap.data();
   if (quantity >= totalQuantity) return;
 
-  await updateDoc(ref, { quantity: quantity + 1 });
+  const newQty = quantity + 1;
+
+  await updateDoc(ref, {
+    quantity: newQty,
+    // ensure status returns to Available when stock increases
+    status: "Available",
+  });
 };
 
 export default function Admin() {
@@ -132,7 +144,7 @@ export default function Admin() {
     mode: null,
     // 'convertWishlist' | 'deleteWishlist' | 'restoreArchive' | 'deleteArchive'
     // 'moveResToWaitlist' | 'moveResToArchive' | 'deleteReservation'
-    // ✅ NEW: 'confirmBagChange'
+    // 'confirmBagChange'
     payload: null,
   });
 
@@ -190,33 +202,96 @@ export default function Admin() {
     fetchItems();
 
     const unsubRes = onSnapshot(collection(db, "reservations"), (snap) => {
-      setReservations(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setReservations(data);
+
+      const now = new Date();
+
+      data.forEach(async (r) => {
+        try {
+          // ===============================
+          // AUTO MARK DUE (after 14 days)
+          // ===============================
+          if (
+            r.status === "On Loan" &&
+            r.dueDate &&
+            typeof r.dueDate.toDate === "function" &&
+            r.dueDate.toDate() < now
+          ) {
+            await updateDoc(doc(db, "reservations", r.id), {
+              status: "Due",
+            });
+          }
+
+          // ===============================
+          // 2-DAY REMINDER EMAIL (ONCE)
+          // ===============================
+          if (
+            r.status === "On Loan" &&
+            r.dueDate &&
+            typeof r.dueDate.toDate === "function" &&
+            r.dueReminderSent !== true
+          ) {
+            const dueDate = r.dueDate.toDate();
+            const diffInDays = Math.ceil(
+              (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+            );
+
+            // Exactly 2 days before due date
+            if (diffInDays <= 2 && diffInDays > 0) {
+              await fetch(`${EMAIL_API_BASE}/email/due-reminder`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  parentEmail: r.parentEmail,
+                  parentName: r.parentName,
+                  childName: r.childName,
+                  itemName: r.itemName,
+                  dueDate: dueDate.toISOString(),
+                }),
+              });
+
+              // Prevent duplicate reminders
+              await updateDoc(doc(db, "reservations", r.id), {
+                dueReminderSent: true,
+              });
+
+              console.log(
+                `✅ Due reminder sent for ${r.itemName} (${r.parentEmail})`
+              );
+            }
+          }
+        } catch (err) {
+          console.error("Reminder/Due check error:", err);
+        }
+      });
     });
 
-    const unsubWish = onSnapshot(collection(db, "wishlists"), (snap) => {
-      setWishlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+        const unsubWish = onSnapshot(collection(db, "wishlists"), (snap) => {
+          setWishlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        });
 
-    const unsubArch = onSnapshot(collection(db, "archives"), (snap) => {
-      setArchives(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+        const unsubArch = onSnapshot(collection(db, "archives"), (snap) => {
+          setArchives(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        });
 
-    return () => {
-      unsubRes();
-      unsubWish();
-      unsubArch();
-    };
-  }, []);
+        return () => {
+          unsubRes();
+          unsubWish();
+          unsubArch();
+        };
+      }, []);
 
-  const fetchItems = async () => {
-    const res = await getDocs(collection(db, "items"));
-    const data = res.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setItems(data);
-    setFilteredItems(data);
-  };
+      const fetchItems = async () => {
+        const res = await getDocs(collection(db, "items"));
+        const data = res.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setItems(data);
+        setFilteredItems(data);
+      };
 
   /* ------------------ FILTER ITEMS ------------------ */
   useEffect(() => {
+
     let updated = [...items];
 
     if (categoryFilter)
@@ -306,10 +381,13 @@ export default function Admin() {
     const qty = Number(formData.quantity) || 0;
     const totalQty = Number(formData.totalQuantity) || qty;
 
+    const computedStatus = qty === 0 ? "On Loan" : "Available";
+
     await addDoc(collection(db, "items"), {
       ...formData,
       quantity: qty,
       totalQuantity: totalQty,
+      status: computedStatus,
       createdAt: serverTimestamp(),
     });
 
@@ -337,10 +415,14 @@ export default function Admin() {
     const qty = Number(formData.quantity) || 0;
     const totalQty = Number(formData.totalQuantity) || 0;
 
+    const safeQty = Math.min(qty, totalQty);
+    const computedStatus = safeQty === 0 ? "On Loan" : "Available";
+
     await updateDoc(doc(db, "items", editingItem.id), {
       ...formData,
-      quantity: Math.min(qty, totalQty),
+      quantity: safeQty,
       totalQuantity: totalQty,
+      status: computedStatus,
     });
 
     setEditingItem(null);
@@ -357,7 +439,7 @@ export default function Admin() {
   };
 
   /* ======================================================
-     ✅ BAG NO UPDATE (called ONLY after confirmation)
+    BAG NO UPDATE (called ONLY after confirmation)
   ======================================================= */
   const handleUpdateBagNo = async (reservation, bagNo) => {
     try {
@@ -371,7 +453,7 @@ export default function Admin() {
   };
 
   /* ======================================================
-     ✅ NEW: CONFIRM BAG NO CHANGE (non-IT friendly)
+  CONFIRM BAG NO CHANGE (non-IT friendly)
   ======================================================= */
   const confirmBagNoChange = (reservation, newBagNo, onConfirmSave) => {
     setConfirmModal({
@@ -392,7 +474,7 @@ export default function Admin() {
       if (newStatus === "Returned") {
         await incrementItemQuantity(reservation.itemId);
 
-        // ✅ keep bagNo in archive; reservation doc is deleted (bag is freed)
+        // keep bagNo in archive; reservation doc is deleted (bag is freed)
         const { id, bagNo, ...cleanReservation } = reservation;
 
         await addDoc(collection(db, "archives"), {
@@ -416,18 +498,31 @@ export default function Admin() {
         return;
       }
 
-      // On Loan: decrement stock, but DO NOT email parent
+      // On Loan should also store dueDate (+14 days) and NOT email
       if (newStatus === "On Loan") {
         await decrementItemQuantity(reservation.itemId);
+
+        const start = new Date();
+        const due = new Date(start);
+        due.setDate(start.getDate() + 14);
+
+        await updateDoc(doc(db, "reservations", reservation.id), {
+          status: "On Loan",
+          loanStartDate: serverTimestamp(),
+          dueDate: due,
+          dueReminderSent: false, //  prevents duplicate reminder emails
+        });
+
+        return;
       }
 
-      // Update reservation status
+      // Update reservation status (other statuses, including "Due")
       await updateDoc(doc(db, "reservations", reservation.id), {
         status: newStatus,
       });
 
-      // Email for all statuses EXCEPT "On Loan"
-      if (newStatus !== "On Loan") {
+      // Email for all statuses EXCEPT "On Loan" and "Due"
+      if (newStatus !== "On Loan" && newStatus !== "Due") {
         await sendStatusEmail({
           parentEmail: reservation.parentEmail,
           parentName: reservation.parentName,
@@ -468,7 +563,7 @@ export default function Admin() {
       return;
     }
 
-    // ✅ NEW: Bag change confirmation
+    // Bag change confirmation
     if (mode === "confirmBagChange") {
       try {
         if (typeof payload.onConfirmSave === "function") {
@@ -592,32 +687,36 @@ export default function Admin() {
       "wishlist.csv"
     );
 
- const exportArchiveCSV = () =>
-  downloadCSV(
-    ["Item", "Parent", "Email", "Child", "Status", "Returned Date"],
-    filteredArchives.map((a) => [
-      a.itemName,
-      a.parentName,
-      a.parentEmail,
-      a.childName,
-      "Returned",
-      a.archivedAt?.toDate ? a.archivedAt.toDate().toLocaleDateString() : "N/A",
-    ]),
-    "archive.csv"
-  );
-
+  const exportArchiveCSV = () =>
+    downloadCSV(
+      ["Item", "Parent", "Email", "Child", "Status", "Returned Date"],
+      filteredArchives.map((a) => [
+        a.itemName,
+        a.parentName,
+        a.parentEmail,
+        a.childName,
+        "Returned",
+        a.archivedAt?.toDate ? a.archivedAt.toDate().toLocaleDateString() : "N/A",
+      ]),
+      "archive.csv"
+    );
 
   /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
   const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
 
-  // Source of truth for "On Loan"
-  const totalLoaned = reservations.filter((r) => r.status === "On Loan").length;
+  // UPDATED: include "Due" as still On Loan (inventory is still out)
+  const totalLoaned = reservations.filter(
+    (r) => r.status === "On Loan" || r.status === "Due"
+  ).length;
 
   const totalAvailable = Math.max(totalInventory - totalLoaned, 0);
 
   const pending = reservations.filter((r) => r.status === "Pending").length;
   const ready = reservations.filter((r) => r.status === "Ready for Pickup").length;
   const waitlistCount = wishlist.length;
+
+  // Due for Return count (admin-only)
+  const dueCount = reservations.filter((r) => r.status === "Due").length;
 
   /* ------------------- LOGOUT ------------------- */
   const handleLogout = async () => {
@@ -679,6 +778,11 @@ export default function Admin() {
           label="Waitlist Requests"
           value={waitlistCount}
           border="border-purple-500"
+        />
+        <SectionCard
+          label="Due for Return"
+          value={dueCount}
+          border="border-red-800"
         />
       </div>
 
@@ -963,12 +1067,12 @@ export default function Admin() {
               <thead className="bg-bethLightGray">
                 <tr>
                   <th className="p-2 border">Item</th>
-                    <th className="p-2 border">Parent</th>
-                    <th className="p-2 border">Email</th>
-                    <th className="p-2 border">Child</th>
-                    <th className="p-2 border">Status</th>
-                    <th className="p-2 border">Returned Date</th>
-                    <th className="p-2 border">Actions</th>
+                  <th className="p-2 border">Parent</th>
+                  <th className="p-2 border">Email</th>
+                  <th className="p-2 border">Child</th>
+                  <th className="p-2 border">Status</th>
+                  <th className="p-2 border">Returned Date</th>
+                  <th className="p-2 border">Actions</th>
                 </tr>
               </thead>
 
@@ -1069,7 +1173,9 @@ export default function Admin() {
             : confirmModal.mode === "deleteReservation"
             ? "Delete this reservation? It will be moved to Archive."
             : confirmModal.mode === "confirmBagChange"
-            ? `Are you sure you want to change the bag number to "${confirmModal.payload?.newBagNo || ""}"?`
+            ? `Are you sure you want to change the bag number to "${
+                confirmModal.payload?.newBagNo || ""
+              }"?`
             : ""
         }
         confirmLabel={

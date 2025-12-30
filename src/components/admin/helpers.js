@@ -24,6 +24,8 @@ export const badgeColor = (status) => {
       return "bg-yellow-200 text-yellow-800";
     case "On Loan":
       return "bg-red-200 text-red-800";
+    case "Due":
+      return "bg-red-500 text-red-800";
     case "Returned":
       return "bg-green-200 text-green-800";
     case "Ready for Pickup":

@@ -15,9 +15,7 @@ export default function ReservationRow({
 }) {
   const status = res.status || "Pending";
 
-  // ⚠️ NOTE:
-  // We intentionally do NOT disable Bag No editing when "On Loan"
-  // Actions dropdown is still disabled below
+
   const actionsDisabled = status === "On Loan";
 
   const preferred = res.preferredDay

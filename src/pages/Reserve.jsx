@@ -212,7 +212,7 @@ export default function Reserve() {
          {/* Parent Name */}
   <div>
     <label className="block text-sm font-medium mb-1">
-      Parent / Guardian Name
+      Parent / Guardian Full Name
     </label>
     <input
       type="text"
@@ -227,7 +227,7 @@ export default function Reserve() {
   {/* Parent Email */}
   <div>
     <label className="block text-sm font-medium mb-1">
-      Registered Nucleus Email
+      Registered Email on File
     </label>
     <input
       type="email"

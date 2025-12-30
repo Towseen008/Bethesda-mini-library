@@ -20,6 +20,7 @@ export const ITEM_STATUS_OPTIONS = ["Available", "Pending", "On Loan"];
 export const RESERVATION_STATUS_OPTIONS = [
   "Pending",
   "Ready for Pickup",
+  "Due",
   "On Loan",
   "Returned",
 ];
@@ -31,6 +32,6 @@ export const INITIAL_FORM_STATE = {
   description: "",
   images: [],
   status: "Available",
-  quantity: 0,
-  totalQuantity: 0,
+  quantity: 1,
+  totalQuantity: 1,
 };
