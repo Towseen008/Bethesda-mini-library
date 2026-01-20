@@ -71,14 +71,14 @@ export default function Header() {
                 About Library
               </Link>
               <Link
-                to="#faq"
+                to="/about#faq"
                 onClick={closeAll}
                 className="block p-2 hover:bg-gray-100 rounded"
               >
                 FAQ
               </Link>
               <Link
-                to="#contact"
+                to="/about#contact"
                 onClick={closeAll}
                 className="block p-2 hover:bg-gray-100 rounded"
               >
@@ -108,10 +108,10 @@ export default function Header() {
               <Link to="/about" onClick={closeAll} className="block hover:text-bethLightBlue">
                 About Library
               </Link>
-              <Link to="#faq" onClick={closeAll} className="block hover:text-bethLightBlue">
+              <Link to="/about#faq" onClick={closeAll} className="block hover:text-bethLightBlue">
                 FAQ
               </Link>
-              <Link to="#contact" onClick={closeAll} className="block hover:text-bethLightBlue">
+              <Link to="/about#contact" onClick={closeAll} className="block hover:text-bethLightBlue">
                 Contact Us
               </Link>
             </div>
