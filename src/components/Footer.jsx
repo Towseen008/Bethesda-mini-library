@@ -16,14 +16,20 @@ export function Footer() {
           <p className="text-sm">3310 Schmon Parkway, Thorold, ON, L2V 4Y6</p>
 
           <p className="text-sm">
-            <a href="mailto:toylending@bethesdaservices.com" className="hover:text-bethLightBlue underline">
+            <a
+              href="mailto:toylending@bethesdaservices.com"
+              className="hover:text-bethLightBlue underline"
+            >
               toylending@bethesdaservices.com
             </a>
           </p>
 
           <p className="text-sm">
-            <a href="tel:9056846918" className="hover:text-bethLightBlue underline">
-              905.684.6918
+            <a
+              href="tel:+19056846918,212"
+              className="hover:text-bethLightBlue underline"
+            >
+              905.684.6918 ext. 212
             </a>
           </p>
         </div>

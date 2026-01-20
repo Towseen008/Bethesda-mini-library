@@ -161,10 +161,10 @@ export default function AboutUs() {
           <p>
             ☎️{" "}
             <a
-              href="tel:9056846918"
-              className="underline hover:text-white"
+              href="tel:+19056846918,212"
+              className="hover:text-bethLightBlue underline"
             >
-              905.684.6918
+              905.684.6918 ext. 212
             </a>
           </p>
         </div>

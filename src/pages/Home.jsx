@@ -231,8 +231,9 @@ export default function Home() {
           </h1>
 
           <p className="text-sm sm:text-lg lg:text-xl text-gray-200 mb-6 opacity-0 animate-heroFloat delay-[350ms] leading-relaxed">
-            Explore our collection of educational toys, reserve the ones that fit
-            your child’s needs, and we’ll notify you when they’re ready for pickup.
+            A community resource supporting children’s learning, play, and development. 
+            Explore our collection of educational toys, 
+            reserve the ones that fit your child’s needs, and we’ll notify you when they’re ready for pickup.
           </p>
 
           <a
