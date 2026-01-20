@@ -470,11 +470,10 @@ export default function Admin() {
   /* ---------------- RESERVATION STATUS ---------------- */
   const handleReservationStatus = async (reservation, newStatus) => {
     try {
-      // Returned: archive + delete reservation + increment stock + email
+      // 1) Returned: increment stock + archive + delete reservation + email
       if (newStatus === "Returned") {
         await incrementItemQuantity(reservation.itemId);
 
-        // keep bagNo in archive; reservation doc is deleted (bag is freed)
         const { id, bagNo, ...cleanReservation } = reservation;
 
         await addDoc(collection(db, "archives"), {
@@ -498,7 +497,7 @@ export default function Admin() {
         return;
       }
 
-      // On Loan should also store dueDate (+14 days) and NOT email
+      // 2) On Loan: decrement stock + set dueDate (+14) + no email
       if (newStatus === "On Loan") {
         await decrementItemQuantity(reservation.itemId);
 
@@ -510,18 +509,27 @@ export default function Admin() {
           status: "On Loan",
           loanStartDate: serverTimestamp(),
           dueDate: due,
-          dueReminderSent: false, //  prevents duplicate reminder emails
+          dueReminderSent: false,
         });
 
         return;
       }
 
-      // Update reservation status (other statuses, including "Due")
+      // 3) Review Return: just mark status, do NOT increment stock, do NOT archive/delete, do NOT email
+      if (newStatus === "Review Return") {
+        await updateDoc(doc(db, "reservations", reservation.id), {
+          status: "Review Return",
+          reviewReturnAt: serverTimestamp(), // optional, harmless
+        });
+        return;
+      }
+
+      // 4) All other statuses (Pending / Ready for Pickup / Due)
       await updateDoc(doc(db, "reservations", reservation.id), {
         status: newStatus,
       });
 
-      // Email for all statuses EXCEPT "On Loan" and "Due"
+      // Email for all statuses EXCEPT "On Loan", "Due", and "Review Return"
       if (newStatus !== "On Loan" && newStatus !== "Due") {
         await sendStatusEmail({
           parentEmail: reservation.parentEmail,
@@ -706,7 +714,7 @@ export default function Admin() {
 
   // UPDATED: include "Due" as still On Loan (inventory is still out)
   const totalLoaned = reservations.filter(
-    (r) => r.status === "On Loan" || r.status === "Due"
+  (r) => r.status === "On Loan" || r.status === "Due" || r.status === "Review Return"
   ).length;
 
   const totalAvailable = Math.max(totalInventory - totalLoaned, 0);

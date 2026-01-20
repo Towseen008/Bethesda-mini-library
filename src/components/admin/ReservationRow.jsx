@@ -15,8 +15,7 @@ export default function ReservationRow({
 }) {
   const status = res.status || "Pending";
 
-
-  const actionsDisabled = status === "On Loan";
+  const actionsDisabled = status === "On Loan" || status === "Review Return";
 
   const preferred = res.preferredDay
     ? new Date(res.preferredDay).toLocaleDateString()
@@ -58,7 +57,7 @@ export default function ReservationRow({
         {preferred}
       </td>
 
-      {/* 👜 BAG NO (EDIT → CONFIRM → SAVE) */}
+      {/* BAG NO (EDIT → CONFIRM → SAVE) */}
       <td className="p-2 border whitespace-nowrap">
         {!editingBag ? (
           <div className="flex items-center gap-2">
@@ -66,7 +65,7 @@ export default function ReservationRow({
               {res.bagNo || "—"}
             </span>
 
-            {/* ✅ Edit is ALWAYS visible */}
+            {/* Edit is ALWAYS visible */}
             <button
               onClick={() => setEditingBag(true)}
               className="text-xs text-blue-600 underline"
@@ -154,7 +153,7 @@ export default function ReservationRow({
           }`}
         >
           <option value="" disabled>
-            {actionsDisabled ? "On Loan" : "Actions"}
+            {actionsDisabled ? "On Loan" : "Delete"}
           </option>
           <option value="waitlist">Move to Waitlist</option>
           <option value="archive">Move to Archive</option>
