@@ -373,6 +373,19 @@ export default function Admin() {
     setFilteredArchives(updated);
     setCurrentArchivePage(1);
   }, [archives, archiveSearch]);
+  
+  /* ---------------- ARCHIVE NOTE SAVE ---------------- */
+const handleSaveArchiveNote = async (archiveId, newNote) => {
+  try {
+    await updateDoc(doc(db, "archives", archiveId), {
+      note: newNote || "",
+      noteUpdatedAt: serverTimestamp(), // optional but helpful
+    });
+  } catch (err) {
+    console.error("Failed to save archive note:", err);
+    throw err;
+  }
+};
 
   /* --------------------- ADD ITEM ---------------------- */
   const handleSubmit = async (e) => {
@@ -481,6 +494,8 @@ export default function Admin() {
           bagNo: bagNo || null,
           status: "Returned",
           archivedAt: serverTimestamp(),
+          loanStartDate: reservation.loanStartDate ?? null,
+          note: reservation.note ?? "",
         });
 
         await deleteDoc(doc(db, "reservations", reservation.id));
@@ -497,7 +512,7 @@ export default function Admin() {
         return;
       }
 
-      // 2) On Loan: decrement stock + set dueDate (+14) + no email
+      // On Loan: decrement stock + set dueDate (+14) + no email
       if (newStatus === "On Loan") {
         await decrementItemQuantity(reservation.itemId);
 
@@ -515,22 +530,22 @@ export default function Admin() {
         return;
       }
 
-      // 3) Review Return: just mark status, do NOT increment stock, do NOT archive/delete, do NOT email
+      //Review Return: just mark status, do NOT increment stock, do NOT archive/delete, do NOT email
       if (newStatus === "Review Return") {
         await updateDoc(doc(db, "reservations", reservation.id), {
           status: "Review Return",
-          reviewReturnAt: serverTimestamp(), // optional, harmless
+          reviewReturnAt: serverTimestamp(),
         });
         return;
       }
 
-      // 4) All other statuses (Pending / Ready for Pickup / Due)
+      //All other statuses (Pending / Ready for Pickup / Due)
       await updateDoc(doc(db, "reservations", reservation.id), {
         status: newStatus,
       });
 
       // Email for all statuses EXCEPT "On Loan", "Due", and "Review Return"
-      if (newStatus !== "On Loan" && newStatus !== "Due") {
+      if (newStatus !== "On Loan" && newStatus !== "Due" && newStatus !== "Review Return") {
         await sendStatusEmail({
           parentEmail: reservation.parentEmail,
           parentName: reservation.parentName,
@@ -596,19 +611,21 @@ export default function Admin() {
           createdAt: payload.createdAt || serverTimestamp(),
         });
         await deleteDoc(doc(db, "reservations", id));
-      }
+      }   
 
-      // ===== NEW: Reservations -> Archive (manual archive) =====
+      // ===== NEW: Reservations -> Archive
       else if (mode === "moveResToArchive") {
         const reason = payload.archiveReason || "Archived";
 
-        // remove archiveReason from document clean (so it doesn't duplicate if you don't want it)
+      // remove archiveReason from document clean (so it doesn't duplicate if you don't want it)
         const { archiveReason, ...cleanNoReason } = payload;
 
         await addDoc(collection(db, "archives"), {
           ...cleanNoReason,
           archivedAt: serverTimestamp(),
           archiveReason: reason,
+          loanStartDate: payload.loanStartDate ?? null,
+          note: payload.note ?? "",
         });
         await deleteDoc(doc(db, "reservations", id));
       }
@@ -619,6 +636,8 @@ export default function Admin() {
           ...clean,
           archivedAt: serverTimestamp(),
           archiveReason: "Deleted",
+          loanStartDate: payload.loanStartDate ?? null,
+          note: payload.note ?? "",
         });
         await deleteDoc(doc(db, "reservations", id));
       }
@@ -695,24 +714,26 @@ export default function Admin() {
       "wishlist.csv"
     );
 
+ 
   const exportArchiveCSV = () =>
     downloadCSV(
-      ["Item", "Parent", "Email", "Child", "Status", "Returned Date"],
+      ["Item", "Parent", "Email", "Child", "Status", "Pickup Date", "Returned Date", "Note"],
       filteredArchives.map((a) => [
         a.itemName,
         a.parentName,
         a.parentEmail,
         a.childName,
         "Returned",
+        a.loanStartDate?.toDate ? a.loanStartDate.toDate().toLocaleDateString() : "N/A",
         a.archivedAt?.toDate ? a.archivedAt.toDate().toLocaleDateString() : "N/A",
+        a.note || "",
       ]),
       "archive.csv"
-    );
+  );
 
   /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
   const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
 
-  // UPDATED: include "Due" as still On Loan (inventory is still out)
   const totalLoaned = reservations.filter(
   (r) => r.status === "On Loan" || r.status === "Due" || r.status === "Review Return"
   ).length;
@@ -723,7 +744,6 @@ export default function Admin() {
   const ready = reservations.filter((r) => r.status === "Ready for Pickup").length;
   const waitlistCount = wishlist.length;
 
-  // Due for Return count (admin-only)
   const dueCount = reservations.filter((r) => r.status === "Due").length;
 
   /* ------------------- LOGOUT ------------------- */
@@ -1079,7 +1099,9 @@ export default function Admin() {
                   <th className="p-2 border">Email</th>
                   <th className="p-2 border">Child</th>
                   <th className="p-2 border">Status</th>
+                  <th className="p-2 border">Pickup Date</th>
                   <th className="p-2 border">Returned Date</th>
+                  <th className="p-2 border">Note</th>
                   <th className="p-2 border">Actions</th>
                 </tr>
               </thead>
@@ -1096,6 +1118,7 @@ export default function Admin() {
                       entry={entry}
                       onRestore={() => openConfirm("restoreArchive", entry)}
                       onDelete={() => openConfirm("deleteArchive", entry)}
+                      onSaveNote={handleSaveArchiveNote}
                     />
                   ))}
               </tbody>

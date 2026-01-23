@@ -22,7 +22,6 @@ export const RESERVATION_STATUS_OPTIONS = [
   "Ready for Pickup",
   "Due",
   "On Loan",
-  "Review Return",
   "Returned",
 ];
 
