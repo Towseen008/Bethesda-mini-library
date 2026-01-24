@@ -20,8 +20,9 @@ export const ITEM_STATUS_OPTIONS = ["Available", "Pending", "On Loan"];
 export const RESERVATION_STATUS_OPTIONS = [
   "Pending",
   "Ready for Pickup",
-  "Due",
   "On Loan",
+  "Due",
+  "Review Return",
   "Returned",
 ];
 

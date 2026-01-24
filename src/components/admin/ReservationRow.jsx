@@ -138,10 +138,10 @@ export default function ReservationRow({
           className="border p-1 text-xs rounded"
         >
           {RESERVATION_STATUS_OPTIONS.map((s) => (
-            <option key={s}>{s}</option>
+            <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        
+
         {/* EXTEND BUTTON (only for On Loan / Due) */}
         {(status === "On Loan" || status === "Due") && (
           <button

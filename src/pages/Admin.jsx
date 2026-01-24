@@ -12,6 +12,7 @@ import {
   onSnapshot,
   getDoc,
   Timestamp,
+  writeBatch
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../firebaseConfig";
@@ -764,13 +765,10 @@ const handleExtendLoan = async (reservation) => {
 
   /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
   const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
-
   const totalLoaned = reservations.filter(
-  (r) => r.status === "On Loan" || r.status === "Due" || r.status === "Review Return"
+    (r) => r.status === "On Loan" || r.status === "Due" || r.status === "Review Return"
   ).length;
-
   const totalAvailable = Math.max(totalInventory - totalLoaned, 0);
-
   const pending = reservations.filter((r) => r.status === "Pending").length;
   const ready = reservations.filter((r) => r.status === "Ready for Pickup").length;
   const waitlistCount = wishlist.length;
@@ -890,6 +888,7 @@ const handleExtendLoan = async (reservation) => {
             >
               Export Inventory CSV
             </button>
+
           </div>
 
           {/* FILTERS */}
