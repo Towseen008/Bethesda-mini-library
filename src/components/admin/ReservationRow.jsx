@@ -12,10 +12,11 @@ export default function ReservationRow({
   onDelete,
   onUpdateBagNo,        // saves after confirmation
   onConfirmBagChange,   // opens ConfirmModal
+  onExtendLoan,
 }) {
   const status = res.status || "Pending";
 
-  const actionsDisabled = status === "On Loan" || status === "Review Return";
+  const actionsDisabled = status === "On Loan" || status === "Due" || status === "Review Return";
 
   const preferred = res.preferredDay
     ? new Date(res.preferredDay).toLocaleDateString()
@@ -116,11 +117,16 @@ export default function ReservationRow({
 
       {/* STATUS BADGE */}
       <td className="p-2 border whitespace-nowrap">
-        <span
-          className={`px-2 py-1 text-xs rounded-full ${badgeColor(status)}`}
-        >
-          {status}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 text-xs rounded-full ${badgeColor(status)}`}>
+            {status}
+          </span>
+          {res.extended === true && (
+            <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800 border border-purple-300">
+              Extended
+            </span>
+          )}
+        </div>
       </td>
 
       {/* ACTIONS */}
@@ -135,6 +141,22 @@ export default function ReservationRow({
             <option key={s}>{s}</option>
           ))}
         </select>
+        
+        {/* EXTEND BUTTON (only for On Loan / Due) */}
+        {(status === "On Loan" || status === "Due") && (
+          <button
+            onClick={() => onExtendLoan?.(res)}
+            disabled={res.extended === true}
+            className={`px-2 py-1 text-xs rounded text-white ${
+              res.extended === true
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-purple-600 hover:bg-purple-700"
+            }`}
+            title={res.extended === true ? "Already extended" : "Extend by 1 week"}
+          >
+            {res.extended === true ? "Extended" : "+1 Week"}
+          </button>
+        )}
 
         {/* ACTIONS DROPDOWN (still disabled when On Loan) */}
         <select

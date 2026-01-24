@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   onSnapshot,
   getDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../firebaseConfig";
@@ -197,6 +198,13 @@ export default function Admin() {
     setUploading(false);
   };
 
+        const fetchItems = async () => {
+        const res = await getDocs(collection(db, "items"));
+        const data = res.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setItems(data);
+        setFilteredItems(data);
+      };
+
   /* ------------------ INITIAL LOAD ------------------ */
   useEffect(() => {
     fetchItems();
@@ -227,7 +235,7 @@ export default function Admin() {
           // 2-DAY REMINDER EMAIL (ONCE)
           // ===============================
           if (
-            r.status === "On Loan" &&
+            (r.status === "On Loan" || r.status === "Due") &&
             r.dueDate &&
             typeof r.dueDate.toDate === "function" &&
             r.dueReminderSent !== true
@@ -281,13 +289,6 @@ export default function Admin() {
           unsubArch();
         };
       }, []);
-
-      const fetchItems = async () => {
-        const res = await getDocs(collection(db, "items"));
-        const data = res.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setItems(data);
-        setFilteredItems(data);
-      };
 
   /* ------------------ FILTER ITEMS ------------------ */
   useEffect(() => {
@@ -523,8 +524,9 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
         await updateDoc(doc(db, "reservations", reservation.id), {
           status: "On Loan",
           loanStartDate: serverTimestamp(),
-          dueDate: due,
+          dueDate: Timestamp.fromDate(due),
           dueReminderSent: false,
+          extended: false,
         });
 
         return;
@@ -559,6 +561,35 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
       console.error("Failed to update reservation status:", err);
     }
   };
+
+   /* ---------------- EXTEND LOAN ( +7 days ) ---------------- */
+const handleExtendLoan = async (reservation) => {
+  try {
+    // Only allow extend when On Loan or Due
+    if (reservation.status !== "On Loan" && reservation.status !== "Due") return;
+
+    // Prevent extending twice (optional but recommended)
+    if (reservation.extended === true) return;
+
+    // Use existing dueDate if present, otherwise base from today
+    const baseDue = reservation.dueDate?.toDate
+      ? reservation.dueDate.toDate()
+      : new Date();
+
+    const newDue = new Date(baseDue);
+    newDue.setDate(newDue.getDate() + 7);
+
+    await updateDoc(doc(db, "reservations", reservation.id), {
+      dueDate: Timestamp.fromDate(newDue), // Firestore Timestamp
+      dueReminderSent: false,              // reset reminder
+      extended: true,                      // label flag
+      extendedAt: serverTimestamp(),       // optional audit
+      status: "On Loan",
+    });
+  } catch (err) {
+    console.error("Failed to extend loan:", err);
+  }
+};
 
   /* ======================================================
      RESERVATION ACTIONS (NOW CONFIRM MODAL, NO window.confirm)
@@ -599,7 +630,7 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
       }
       return;
     }
-
+   
     // IMPORTANT: do NOT store the Firestore doc id inside the document
     const { id, ...clean } = payload;
 
@@ -729,7 +760,7 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
         a.note || "",
       ]),
       "archive.csv"
-  );
+    );
 
   /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
   const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
@@ -985,6 +1016,7 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
                       onDelete={handleDeleteReservation}
                       onUpdateBagNo={handleUpdateBagNo}
                       onConfirmBagChange={confirmBagNoChange}
+                      onExtendLoan={handleExtendLoan}
                     />
                   ))}
               </tbody>
