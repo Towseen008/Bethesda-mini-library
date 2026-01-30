@@ -1,18 +1,7 @@
 // src/pages/Admin.jsx
 
 import { useState, useEffect } from "react";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  doc,
-  deleteDoc,
-  serverTimestamp,
-  onSnapshot,
-  getDoc,
-  Timestamp,
-  writeBatch
+import { collection,getDocs,addDoc, updateDoc, doc, deleteDoc, serverTimestamp, onSnapshot, getDoc, Timestamp,
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../firebaseConfig";
@@ -74,9 +63,11 @@ const decrementItemQuantity = async (itemId) => {
   // status auto-sync + consistent casing
   const newQty = quantity - 1;
 
+  const { status } = snap.data();
+
   await updateDoc(ref, {
     quantity: newQty,
-    status: newQty === 0 ? "On Loan" : "Available",
+    status: status === "Not Available" ? "Not Available" : newQty === 0 ? "On Loan" : "Available",
   });
 };
 
@@ -90,10 +81,12 @@ const incrementItemQuantity = async (itemId) => {
 
   const newQty = quantity + 1;
 
+  const { status } = snap.data();
+
   await updateDoc(ref, {
     quantity: newQty,
-    // ensure status returns to Available when stock increases
-    status: "Available",
+    // keep Not Available if currently Not Available
+    status: status === "Not Available" ? "Not Available" : "Available",
   });
 };
 
@@ -396,7 +389,12 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
     const qty = Number(formData.quantity) || 0;
     const totalQty = Number(formData.totalQuantity) || qty;
 
-    const computedStatus = qty === 0 ? "On Loan" : "Available";
+    const computedStatus =     
+        formData.status === "Not Available"
+        ? "Not Available"
+        : safeQty === 0
+        ? "On Loan"
+        : "Available";
 
     await addDoc(collection(db, "items"), {
       ...formData,
@@ -765,10 +763,18 @@ const handleExtendLoan = async (reservation) => {
 
   /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
   const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
-  const totalLoaned = reservations.filter(
-    (r) => r.status === "On Loan" || r.status === "Due" || r.status === "Review Return"
-  ).length;
-  const totalAvailable = Math.max(totalInventory - totalLoaned, 0);
+  // Copies that are actually available for borrowing NOW:
+  // - only items with status === "Available"
+  // - use their current quantity
+  const totalAvailable = items.reduce((sum, i) => {
+    if (i.status === "Available") return sum + (i.quantity ?? 0);
+    return sum;
+  }, 0);
+
+  // Optional: show how many copies are currently loaned out (based on stock math)
+  const totalInStock = items.reduce((sum, i) => sum + (i.quantity ?? 0), 0);
+  const totalLoaned = Math.max(totalInventory - totalInStock, 0);
+
   const pending = reservations.filter((r) => r.status === "Pending").length;
   const ready = reservations.filter((r) => r.status === "Ready for Pickup").length;
   const waitlistCount = wishlist.length;

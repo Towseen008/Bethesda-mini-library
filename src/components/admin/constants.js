@@ -15,7 +15,7 @@ export const CATEGORY_OPTIONS = [
 
 export const AGE_GROUP_OPTIONS = ["All Age", "2 to 5", "2 to 10", "6 to 10","10 to 13","14+"];
 
-export const ITEM_STATUS_OPTIONS = ["Available", "Pending", "On Loan"];
+export const ITEM_STATUS_OPTIONS = ["Available", "Not Available", "On Loan"];
 
 export const RESERVATION_STATUS_OPTIONS = [
   "Pending",

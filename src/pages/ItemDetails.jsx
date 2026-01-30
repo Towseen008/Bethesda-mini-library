@@ -60,6 +60,7 @@ export default function ItemDetails() {
 
   const isOnLoan = item.status === "On Loan";
   const isAvailable = item.status === "Available";
+  const isNotAvailable = item.status === "Not Available";
 
   const images = item.images?.length ? item.images : [item.image];
 
@@ -104,7 +105,13 @@ export default function ItemDetails() {
             <span className="font-semibold">Status:</span>{" "}
             <span
               className={
-                isOnLoan ? "text-red-600 font-bold" : "text-green-600 font-bold"
+                isAvailable
+                ? "text-green-600 font-bold"
+                : isOnLoan
+                ? "text-red-600 font-bold"
+                : isNotAvailable
+                ? "text-gray-700 font-bold"
+                : "text-gray-700 font-bold"
               }
             >
               {item.status}
@@ -119,26 +126,32 @@ export default function ItemDetails() {
           {/* BUTTONS */}
           <div className="mt-6 flex flex-col sm:flex-row gap-3">
 
-            {/* Reserve Button */}
-            {isAvailable && (
-              <Link
-                to={`/reserve/${id}`}
-                className="px-5 py-2 bg-bethDeepBlue hover:bg-bethLightBlue text-white rounded"
-              >
-                Reserve This Toy
-              </Link>
-            )}
+        {/* Reserve Button */}
+        {isAvailable && (
+          <Link
+            to={`/reserve/${id}`}
+            className="px-5 py-2 bg-bethDeepBlue hover:bg-bethLightBlue text-white rounded"
+          >
+            Reserve This Toy
+          </Link>
+        )}
 
-            {/* Waitlist Button */}
-            {isOnLoan && (
-              <Link
-                to={`/reserve/${id}`}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
-              >
-                Join Waitlist
-              </Link>
-            )}
+        {/* Waitlist Button */}
+        {isOnLoan && (
+          <Link
+            to={`/reserve/${id}`}
+            className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
+          >
+            Join Waitlist
+          </Link>
+        )}
 
+        {/* Not Available Notice */}
+        {isNotAvailable && (
+          <div className="px-5 py-2 bg-gray-100 text-gray-700 rounded border border-gray-200">
+            This toy is temporarily unavailable and can’t be reserved right now.
+          </div>
+        )}
             {/* BACK */}
             <Link
               to="/"
@@ -154,6 +167,14 @@ export default function ItemDetails() {
               * Joining waitlist requires final approval by Admin.
             </p>
           )}
+          
+          {/* NOT AVAILABLE NOTE */}
+          {isNotAvailable && (
+            <p className="text-xs mt-2 text-gray-600 italic">
+              * This item may be under cleaning, repair, or temporarily removed from circulation.
+            </p>
+          )}
+
         </div>
       </div>
     </div>

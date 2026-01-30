@@ -35,6 +35,9 @@ const shuffleArray = (array) => {
   return shuffled;
 };
 
+const isNotAvailable = (status) =>
+  String(status || "").toLowerCase() === "not available";
+
 export default function Home() {
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
@@ -320,6 +323,7 @@ export default function Home() {
             <optgroup label="Availability">
               <option value="status:Available">Available</option>
               <option value="status:On Loan">On Loan</option>
+              <option value="status:Not Available">Not Available</option>
             </optgroup>
 
             <optgroup label="Categories">
@@ -378,87 +382,141 @@ export default function Home() {
         <p className="text-center text-gray-500">No toys match your filters.</p>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {currentItems.map((item, index) => (
-            <Link
-              to={`/item/${item.id}`}
-              key={item.id}
-              className="bg-white border shadow-md rounded overflow-hidden hover:shadow-xl transform hover:-translate-y-1 transition duration-300 opacity-0 animate-cardPop"
-              style={{ animationDelay: `${index * 120}ms` }}
-            >
-              <img
-                src={item.images?.[0] || item.image}
-                alt={item.name}
-                className="w-full h-64 object-cover"
-              />
-
-              <div className="p-4">
-                <h3 className="text-lg font-semibold text-bethDeepBlue mb-2">
-                  {item.name}
-                </h3>
-
-                <p className="text-sm text-gray-600 mb-1">
-                  Age Group: {item.ageGroup || "N/A"}
-                </p>
-
-                <p className="text-sm text-gray-600 mb-2">
-                  Category: <span>{item.category || "N/A"}</span>
-                </p>
-
-                <span
-                  className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                    item.status === "Available"
-                      ? "bg-green-200 text-green-800"
-                      : "bg-red-200 text-red-800"
-                  }`}
-                >
-                  {item.status}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {currentItems.map((item, index) => (
-            <Link
-              to={`/item/${item.id}`}
-              key={item.id}
-              className="flex gap-4 bg-white border shadow-sm rounded overflow-hidden hover:shadow-md transition transform hover:-translate-y-0.5 opacity-0 animate-cardPop"
-              style={{ animationDelay: `${index * 90}ms` }}
-            >
-              <div className="w-32 h-32 flex-shrink-0 bg-gray-100 overflow-hidden">
+          {currentItems.map((item, index) => {
+            const disabled = isNotAvailable(item.status);
+            const CardInner = (
+              <>
                 <img
                   src={item.images?.[0] || item.image}
                   alt={item.name}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-64 object-cover ${disabled ? "opacity-60" : ""}`}
                 />
+
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold text-bethDeepBlue mb-2">
+                    {item.name}
+                  </h3>
+
+                  <p className="text-sm text-gray-600 mb-1">
+                    Age Group: {item.ageGroup || "N/A"}
+                  </p>
+
+                  <p className="text-sm text-gray-600 mb-2">
+                    Category: <span>{item.category || "N/A"}</span>
+                  </p>
+
+                  <span
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                      item.status === "Available"
+                        ? "bg-green-200 text-green-800"
+                        : isNotAvailable(item.status)
+                        ? "bg-gray-200 text-gray-800"
+                        : "bg-red-200 text-red-800"
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+
+                  {disabled && (
+                    <p className="mt-2 text-xs text-gray-600">
+                      Temporarily unavailable
+                    </p>
+                  )}
+                </div>
+              </>
+            );
+
+            return disabled ? (
+              <div
+                key={item.id}
+                className="bg-white border shadow-md rounded overflow-hidden opacity-0 animate-cardPop cursor-not-allowed"
+                style={{ animationDelay: `${index * 120}ms` }}
+                title="This item is not available for reservation"
+              >
+                {CardInner}
               </div>
+            ) : (
+              <Link
+                to={`/item/${item.id}`}
+                key={item.id}
+                className="bg-white border shadow-md rounded overflow-hidden hover:shadow-xl transform hover:-translate-y-1 transition duration-300 opacity-0 animate-cardPop"
+                style={{ animationDelay: `${index * 120}ms` }}
+              >
+                {CardInner}
+              </Link>
+            );
+          })}
 
-              <div className="flex-1 p-3 flex flex-col justify-center">
-                <h3 className="text-base font-semibold text-bethDeepBlue mb-1 line-clamp-1">
-                  {item.name}
-                </h3>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {currentItems.map((item, index) => {
+            const disabled = isNotAvailable(item.status);
 
-                <p className="text-sm text-gray-600 mb-1">
-                  Age Group: {item.ageGroup || "N/A"}
-                </p>
+            const RowInner = (
+              <>
+                <div className="w-32 h-32 flex-shrink-0 bg-gray-100 overflow-hidden">
+                  <img
+                    src={item.images?.[0] || item.image}
+                    alt={item.name}
+                    className={`w-full h-full object-cover ${disabled ? "opacity-60" : ""}`}
+                  />
+                </div>
 
-                <p className="text-sm text-gray-600 mb-1">
-                  Category: {item.category || "N/A"}
-                </p>
+                <div className="flex-1 p-3 flex flex-col justify-center">
+                  <h3 className="text-base font-semibold text-bethDeepBlue mb-1 line-clamp-1">
+                    {item.name}
+                  </h3>
 
-                <span
-                  className={`inline-block px-2 py-1 rounded-full text-[11px] font-semibold ${
-                    item.status === "Available"
-                      ? "bg-green-200 text-green-800"
-                      : "bg-red-200 text-red-800"
-                  }`}
-                >
-                  {item.status}
-                </span>
+                  <p className="text-sm text-gray-600 mb-1">
+                    Age Group: {item.ageGroup || "N/A"}
+                  </p>
+
+                  <p className="text-sm text-gray-600 mb-1">
+                    Category: {item.category || "N/A"}
+                  </p>
+
+                  <span
+                    className={`inline-block px-2 py-1 rounded-full text-[11px] font-semibold ${
+                      item.status === "Available"
+                        ? "bg-green-200 text-green-800"
+                        : isNotAvailable(item.status)
+                        ? "bg-gray-200 text-gray-800"
+                        : "bg-red-200 text-red-800"
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+
+                  {disabled && (
+                    <p className="mt-1 text-xs text-gray-600">
+                      Temporarily unavailable
+                    </p>
+                  )}
+                </div>
+              </>
+            );
+
+            return disabled ? (
+              <div
+                key={item.id}
+                className="flex gap-4 bg-white border shadow-sm rounded overflow-hidden opacity-0 animate-cardPop cursor-not-allowed"
+                style={{ animationDelay: `${index * 90}ms` }}
+                title="This item is not available for reservation"
+              >
+                {RowInner}
               </div>
-            </Link>
-          ))}
+            ) : (
+              <Link
+                to={`/item/${item.id}`}
+                key={item.id}
+                className="flex gap-4 bg-white border shadow-sm rounded overflow-hidden hover:shadow-md transition transform hover:-translate-y-0.5 opacity-0 animate-cardPop"
+                style={{ animationDelay: `${index * 90}ms` }}
+              >
+                {RowInner}
+              </Link>
+            );
+          })}
         </div>
       )}
 

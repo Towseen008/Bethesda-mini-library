@@ -83,6 +83,11 @@ export default function Reserve() {
   const submitReservation = async (e) => {
     e.preventDefault();
     if (!item || submitting) return;
+    if (item.status === "Not Available") {
+      alert("This toy is temporarily unavailable and can’t be reserved right now.");
+      setSubmitting(false);
+      return;
+    }
 
     setSubmitting(true);
 
@@ -126,6 +131,11 @@ export default function Reserve() {
   const submitWaitlist = async (e) => {
     e.preventDefault();
     if (!item || submitting) return;
+    if (item.status === "Not Available") {
+      alert("This toy is temporarily unavailable and can’t be waitlisted right now.");
+      setSubmitting(false);
+      return;
+    }
 
     setSubmitting(true);
 
@@ -172,6 +182,7 @@ export default function Reserve() {
     return <p className="text-center py-8 text-red-500">Item not found.</p>;
 
   const isOnLoan = item.status === "On Loan";
+  const isNotAvailable = item.status === "Not Available";
   const today = new Date().toISOString().split("T")[0];
 
   /* ======================= RENDER ======================= */
@@ -196,112 +207,125 @@ export default function Reserve() {
         <span className="font-semibold">Status:</span>{" "}
         <span
           className={
-            isOnLoan
-              ? "text-red-600 font-bold"
-              : "text-green-600 font-bold"
+            isNotAvailable
+            ? "text-gray-700 font-bold"
+            :isOnLoan
+            ? "text-red-600 font-bold"
+            : "text-green-600 font-bold"
           }
         >
           {item.status}
         </span>
       </p>
 
+      {isNotAvailable && (
+        <div className="mb-4 p-3 rounded bg-gray-100 border border-gray-200 text-gray-700">
+          This toy is temporarily unavailable and cannot be reserved right now.
+        </div>
+      )}
+
       <form
-        onSubmit={isOnLoan ? submitWaitlist : submitReservation}
-        className="space-y-4"
-      >
+        onSubmit={isNotAvailable ? (e) => e.preventDefault() : isOnLoan ? submitWaitlist : submitReservation
+        }
+        className={`space-y-4 ${isNotAvailable ? "opacity-60 pointer-events-none" : ""}`}
+       >
+
          {/* Parent Name */}
-  <div>
-    <label className="block text-sm font-medium mb-1">
-      Parent / Guardian Full Name
-    </label>
-    <input
-      type="text"
-      name="parentName"
-      value={formData.parentName}
-      onChange={handleChange}
-      required
-      className="w-full border rounded px-3 py-2"
-    />
-  </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Parent / Guardian Full Name
+              </label>
+              <input
+                type="text"
+                name="parentName"
+                value={formData.parentName}
+                onChange={handleChange}
+                required
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
 
-  {/* Parent Email */}
-  <div>
-    <label className="block text-sm font-medium mb-1">
-      Registered Email on File
-    </label>
-    <input
-      type="email"
-      name="parentEmail"
-      value={formData.parentEmail}
-      onChange={handleChange}
-      required
-      className="w-full border rounded px-3 py-2"
-    />
-  </div>
+            {/* Parent Email */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Registered Email on File
+              </label>
+              <input
+                type="email"
+                name="parentEmail"
+                value={formData.parentEmail}
+                onChange={handleChange}
+                required
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
 
-  {/* Child Name */}
-  <div>
-    <label className="block text-sm font-medium mb-1">
-      Child Initials Or Assigned Number
-    </label>
-    <input
-      type="text"
-      name="childName"
-      value={formData.childName}
-      onChange={handleChange}
-      required
-      className="w-full border rounded px-3 py-2"
-    />
-  </div>
+            {/* Child Name */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Child Initials Or Assigned Number
+              </label>
+              <input
+                type="text"
+                name="childName"
+                value={formData.childName}
+                onChange={handleChange}
+                required
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
 
-  {/* Preferred Day (only if reserving) */}
-  {!isOnLoan && (
-    <div>
-      <label className="block text-sm font-medium mb-1">
-        Preferred Pickup Day
-      </label>
-      <input
-        type="date"
-        name="preferredDay"
-        min={today}
-        value={formData.preferredDay}
-        onChange={handleChange}
-        required
-        className="w-full border rounded px-3 py-2"
-      />
-    </div>
-  )}
+            {/* Preferred Day (only if reserving) */}
+            {!isOnLoan && (
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Preferred Pickup Day
+                </label>
+                <input
+                  type="date"
+                  name="preferredDay"
+                  min={today}
+                  value={formData.preferredDay}
+                  onChange={handleChange}
+                  required
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+            )}
 
-  {/* Optional Note */}
-  <div>
-    <label className="block text-sm font-medium mb-1">
-      Notes (optional)
-    </label>
-    <textarea
-      name="note"
-      value={formData.note}
-      onChange={handleChange}
-      rows={3}
-      className="w-full border rounded px-3 py-2"
-    />
-  </div>
-        {/* Button just disabled during submit */}
-        <button
-          type="submit"
-          disabled={submitting}
-          className={`w-full py-2 rounded text-white font-semibold ${
-            isOnLoan
-              ? "bg-purple-600 hover:bg-purple-700"
-              : "bg-bethDeepBlue hover:bg-bethLightBlue"
-          }`}
-        >
-          {submitting
-            ? "Submitting..."
-            : isOnLoan
-            ? "Join Waitlist"
-            : "Submit Reservation"}
-        </button>
-      </form>
+            {/* Optional Note */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Notes (optional)
+              </label>
+              <textarea
+                name="note"
+                value={formData.note}
+                onChange={handleChange}
+                rows={3}
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            {/* Button just disabled during submit */}
+              <button
+                    type="submit"
+                    disabled={submitting || isNotAvailable}
+                    className={`w-full py-2 rounded text-white font-semibold ${
+                      isOnLoan
+                        ? "bg-purple-600 hover:bg-purple-700"
+                        : "bg-bethDeepBlue hover:bg-bethLightBlue"
+                    }`}
+                >
+                  {submitting
+                    ? "Submitting..."
+                    : isNotAvailable
+                    ? "Not Available"
+                    : isOnLoan
+                    ? "Join Waitlist"
+                    : "Submit Reservation"
+                  }
+              </button>
+        </form>
     </div>
   );
 }
