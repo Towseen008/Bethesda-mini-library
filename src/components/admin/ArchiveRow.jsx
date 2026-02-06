@@ -52,7 +52,9 @@ export default function ArchiveRow({
       <td className="p-2 border">{entry.parentName}</td>
       <td className="p-2 border">{entry.parentEmail}</td>
       <td className="p-2 border">{entry.childName}</td>
-      <td className="p-2 border">Returned</td>
+      <td className="p-2 border">
+        {entry.status || entry.archiveReason || "Archived"}
+      </td>
 
       {/* Pickup Date */}
       <td className="p-2 border">{pickupDate}</td>

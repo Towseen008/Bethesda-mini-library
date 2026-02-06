@@ -8,6 +8,7 @@ import {
   addDoc,
   collection,
   serverTimestamp,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import Spinner from "../components/Spinner";
@@ -41,6 +42,16 @@ const sendEmail = async (endpoint, payload) => {
   }
 };
 
+const isNotAvailableStatus = (status) =>
+  String(status || "").toLowerCase() === "not available";
+
+const getPublicStatus = (item) => {
+  if (!item) return "On Loan";
+  if (isNotAvailableStatus(item.status)) return "Not Available";
+  const qty = Number(item.quantity ?? 0);
+  return qty > 0 ? "Available" : "On Loan";
+};
+
 export default function Reserve() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -63,7 +74,7 @@ export default function Reserve() {
       try {
         const ref = doc(db, "items", id);
         const snap = await getDoc(ref);
-        if (snap.exists()) setItem(snap.data());
+        if (snap.exists()) setItem({ id: snap.id, ...snap.data() });
       } catch (err) {
         console.error("Error loading item:", err);
       } finally {
@@ -81,20 +92,44 @@ export default function Reserve() {
       SUBMIT RESERVATION
   ----------------------------------------------------------- */
   const submitReservation = async (e) => {
-    e.preventDefault();
-    if (!item || submitting) return;
-    if (item.status === "Not Available") {
-      alert("This toy is temporarily unavailable and can’t be reserved right now.");
-      setSubmitting(false);
-      return;
-    }
+  e.preventDefault();
+  if (!item || submitting) return;
 
-    setSubmitting(true);
+  setSubmitting(true);
 
-    try {
-      await addDoc(collection(db, "reservations"), {
+  try {
+    const itemRef = doc(db, "items", id);
+    const reservationRef = doc(collection(db, "reservations")); // create ID first
+
+    const result = await runTransaction(db, async (tx) => {
+      const itemSnap = await tx.get(itemRef);
+      if (!itemSnap.exists()) throw new Error("Item not found");
+
+      const latest = itemSnap.data();
+
+      // block if admin marked Not Available
+      if (isNotAvailableStatus(latest.status)) {
+        return { type: "not_available" };
+      }
+
+      const qty = Number(latest.quantity ?? 0);
+
+      // if no inventory, do not create reservation, return "waitlist"
+      if (qty <= 0) {
+        return { type: "waitlist" };
+      }
+
+      const newQty = qty - 1;
+
+      tx.update(itemRef, {
+        quantity: newQty,
+        // IMPORTANT: do NOT change admin workflow statuses here
+        // item.status can remain whatever admin uses; public site uses quantity
+      });
+
+      tx.set(reservationRef, {
         itemId: id,
-        itemName: item.name,
+        itemName: latest.name,
         parentName: formData.parentName,
         parentEmail: formData.parentEmail,
         childName: formData.childName,
@@ -102,28 +137,46 @@ export default function Reserve() {
         note: formData.note || "",
         status: "Pending",
         createdAt: serverTimestamp(),
+        inventoryCommitted: true, 
       });
 
-      // ✅ Navigate immediately
-      navigate("/confirmation", {
-        state: { type: "reservation", itemName: item.name },
-      });
+      return { type: "reserved" };
+    });
 
-      // 🔔 Fire-and-forget email (DO NOT await)
-      sendEmail("/email/reservation-created", {
-        parentEmail: formData.parentEmail,
-        parentName: formData.parentName,
-        childName: formData.childName,
-        itemName: item.name,
-        preferredDay: formData.preferredDay || "Not specified",
-        note: formData.note || "",
-      });
-    } catch (err) {
-      console.error("Error submitting reservation:", err);
-      alert("Error creating reservation.");
+    // Handle outcomes
+    if (result.type === "not_available") {
+      alert("This toy is temporarily unavailable and can’t be reserved right now.");
       setSubmitting(false);
+      return;
     }
-  };
+
+    if (result.type === "waitlist") {
+      // allow waitlist submission to proceed
+      setSubmitting(false);
+      await submitWaitlist(e);
+      return;
+    }
+
+    // ✅ Navigate immediately
+    navigate("/confirmation", {
+      state: { type: "reservation", itemName: item.name },
+    });
+
+    // 🔔 Fire-and-forget email
+    sendEmail("/email/reservation-created", {
+      parentEmail: formData.parentEmail,
+      parentName: formData.parentName,
+      childName: formData.childName,
+      itemName: item.name,
+      preferredDay: formData.preferredDay || "Not specified",
+      note: formData.note || "",
+    });
+  } catch (err) {
+    console.error("Error submitting reservation:", err);
+    alert("Error creating reservation.");
+    setSubmitting(false);
+  }
+};
 
   /* -----------------------------------------------------------
       SUBMIT WAITLIST
@@ -131,7 +184,7 @@ export default function Reserve() {
   const submitWaitlist = async (e) => {
     e.preventDefault();
     if (!item || submitting) return;
-    if (item.status === "Not Available") {
+    if (isNotAvailableStatus(item.status)) {
       alert("This toy is temporarily unavailable and can’t be waitlisted right now.");
       setSubmitting(false);
       return;
@@ -181,8 +234,10 @@ export default function Reserve() {
   if (!item)
     return <p className="text-center py-8 text-red-500">Item not found.</p>;
 
-  const isOnLoan = item.status === "On Loan";
-  const isNotAvailable = item.status === "Not Available";
+  const publicStatus = getPublicStatus(item);
+  const isOnLoan = publicStatus === "On Loan";
+  const isNotAvailable = publicStatus === "Not Available";
+
   const today = new Date().toISOString().split("T")[0];
 
   /* ======================= RENDER ======================= */
@@ -214,7 +269,7 @@ export default function Reserve() {
             : "text-green-600 font-bold"
           }
         >
-          {item.status}
+          {publicStatus}
         </span>
       </p>
 

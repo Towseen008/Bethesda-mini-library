@@ -5,6 +5,16 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import Spinner from "../components/Spinner";
 
+const isNotAvailableStatus = (status) =>
+  String(status || "").toLowerCase() === "not available";
+
+const getPublicStatus = (item) => {
+  if (!item) return "On Loan";
+  if (isNotAvailableStatus(item.status)) return "Not Available";
+  const qty = Number(item.quantity ?? 0);
+  return qty > 0 ? "Available" : "On Loan";
+};
+
 export default function ItemDetails() {
   const { id } = useParams();
   const [item, setItem] = useState(null);
@@ -20,11 +30,7 @@ export default function ItemDetails() {
         if (snap.exists()) {
           const data = snap.data();
 
-          // Convert Pending → Available for parents
-          const adjustedStatus =
-            data.status === "Pending" ? "Available" : data.status;
-
-          setItem({ ...data, status: adjustedStatus });
+          setItem({ id: snap.id, ...data });
         }
       } catch (err) {
         console.error("Error fetching item:", err);
@@ -58,9 +64,11 @@ export default function ItemDetails() {
   if (!item)
     return <p className="text-center text-red-500">Item not found.</p>;
 
-  const isOnLoan = item.status === "On Loan";
-  const isAvailable = item.status === "Available";
-  const isNotAvailable = item.status === "Not Available";
+  const publicStatus = getPublicStatus(item);
+
+  const isAvailable = publicStatus === "Available";
+  const isOnLoan = publicStatus === "On Loan";
+  const isNotAvailable = publicStatus === "Not Available";
 
   const images = item.images?.length ? item.images : [item.image];
 
@@ -114,7 +122,7 @@ export default function ItemDetails() {
                 : "text-gray-700 font-bold"
               }
             >
-              {item.status}
+              {publicStatus}
             </span>
           </p>
 

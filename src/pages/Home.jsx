@@ -38,6 +38,15 @@ const shuffleArray = (array) => {
 const isNotAvailable = (status) =>
   String(status || "").toLowerCase() === "not available";
 
+// Public status (frontend-only)
+// - Not Available stays Not Available (disabled)
+// - Otherwise, use quantity to decide if parents can reserve
+const getPublicStatus = (item) => {
+  if (isNotAvailable(item.status)) return "Not Available";
+  const qty = Number(item.quantity ?? 0);
+  return qty > 0 ? "Available" : "On Loan";
+};
+
 export default function Home() {
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
@@ -104,11 +113,6 @@ export default function Home() {
   useEffect(() => {
     let updated = [...items];
 
-    updated = updated.map((i) => ({
-      ...i,
-      status: i.status === "Pending" ? "Available" : i.status,
-    }));
-
     if (searchTerm.trim()) {
       updated = updated.filter((item) =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -131,11 +135,7 @@ export default function Home() {
     }
 
     if (filterType === "status") {
-      if (filterValue === "Available") {
-        updated = updated.filter((i) => i.status === "Available");
-      } else {
-        updated = updated.filter((i) => i.status === filterValue);
-      }
+      updated = updated.filter((i) => getPublicStatus(i) === filterValue);
     }
 
     if (filterType === "sort") {
@@ -383,7 +383,8 @@ export default function Home() {
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {currentItems.map((item, index) => {
-            const disabled = isNotAvailable(item.status);
+            const publicStatus = getPublicStatus(item);
+            const disabled = publicStatus === "Not Available";
             const CardInner = (
               <>
                 <img
@@ -407,14 +408,14 @@ export default function Home() {
 
                   <span
                     className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                      item.status === "Available"
+                      publicStatus === "Available"
                         ? "bg-green-200 text-green-800"
-                        : isNotAvailable(item.status)
+                        : publicStatus === "Not Available"
                         ? "bg-gray-200 text-gray-800"
                         : "bg-red-200 text-red-800"
                     }`}
                   >
-                    {item.status}
+                    {publicStatus}
                   </span>
 
                   {disabled && (
@@ -451,7 +452,8 @@ export default function Home() {
       ) : (
         <div className="space-y-3">
           {currentItems.map((item, index) => {
-            const disabled = isNotAvailable(item.status);
+            const publicStatus = getPublicStatus(item);
+            const disabled = publicStatus === "Not Available";
 
             const RowInner = (
               <>
@@ -477,15 +479,15 @@ export default function Home() {
                   </p>
 
                   <span
-                    className={`inline-block px-2 py-1 rounded-full text-[11px] font-semibold ${
-                      item.status === "Available"
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                      publicStatus === "Available"
                         ? "bg-green-200 text-green-800"
-                        : isNotAvailable(item.status)
+                        : publicStatus === "Not Available"
                         ? "bg-gray-200 text-gray-800"
                         : "bg-red-200 text-red-800"
                     }`}
                   >
-                    {item.status}
+                    {publicStatus}
                   </span>
 
                   {disabled && (

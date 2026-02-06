@@ -1,8 +1,8 @@
 // src/pages/Admin.jsx
-
 import { useState, useEffect } from "react";
-import { collection,getDocs,addDoc, updateDoc, doc, deleteDoc, serverTimestamp, onSnapshot, getDoc, Timestamp,
+import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, onSnapshot, getDoc, Timestamp, runTransaction,
 } from "firebase/firestore";
+
 import { signOut } from "firebase/auth";
 import { auth, db } from "../firebaseConfig";
 
@@ -52,24 +52,6 @@ const sendStatusEmail = async (payload) => {
 /* ======================================================
    INVENTORY HELPERS
 ====================================================== */
-const decrementItemQuantity = async (itemId) => {
-  const ref = doc(db, "items", itemId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-
-  const { quantity = 0 } = snap.data();
-  if (quantity <= 0) return;
-
-  // status auto-sync + consistent casing
-  const newQty = quantity - 1;
-
-  const { status } = snap.data();
-
-  await updateDoc(ref, {
-    quantity: newQty,
-    status: status === "Not Available" ? "Not Available" : newQty === 0 ? "On Loan" : "Available",
-  });
-};
 
 const incrementItemQuantity = async (itemId) => {
   const ref = doc(db, "items", itemId);
@@ -89,6 +71,31 @@ const incrementItemQuantity = async (itemId) => {
     status: status === "Not Available" ? "Not Available" : "Available",
   });
 };
+
+// ===============================
+// TRANSACTION CLAIM LOCK (prevents duplicate emails)
+// ===============================
+const claimEmailLock = async (reservationId, flagField) => {
+  const resRef = doc(db, "reservations", reservationId);
+
+  const claimed = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(resRef);
+    if (!snap.exists()) return false;
+
+    const data = snap.data();
+
+    // If already sent/claimed, stop
+    if (data?.[flagField] === true) return false;
+
+    // Claim it (ONLY ONE browser can win this)
+    tx.update(resRef, { [flagField]: true });
+
+    return true; // winner
+  });
+
+  return claimed;
+};
+
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("add");
@@ -201,7 +208,11 @@ export default function Admin() {
 
   /* ------------------ INITIAL LOAD ------------------ */
   useEffect(() => {
-    fetchItems();
+    const unsubItems = onSnapshot(collection(db, "items"), (snap) => {
+    const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setItems(data);
+    setFilteredItems(data);
+  });
 
     const unsubRes = onSnapshot(collection(db, "reservations"), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -222,6 +233,8 @@ export default function Admin() {
           ) {
             await updateDoc(doc(db, "reservations", r.id), {
               status: "Due",
+              dueReminderSent: true,
+              overdue3DaySent: false, 
             });
           }
 
@@ -239,35 +252,90 @@ export default function Admin() {
               (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
             );
 
-            // Exactly 2 days before due date
             if (diffInDays <= 2 && diffInDays > 0) {
-              await fetch(`${EMAIL_API_BASE}/email/due-reminder`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  parentEmail: r.parentEmail,
-                  parentName: r.parentName,
-                  childName: r.childName,
-                  itemName: r.itemName,
-                  dueDate: dueDate.toISOString(),
-                }),
-              });
+              // 1) claim lock (only one admin wins)
+              const claimed = await claimEmailLock(r.id, "dueReminderSent");
+              if (!claimed) return; // someone else already claimed it
 
-              // Prevent duplicate reminders
-              await updateDoc(doc(db, "reservations", r.id), {
-                dueReminderSent: true,
-              });
+              try {
+                const resp = await fetch(`${EMAIL_API_BASE}/email/due-reminder`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    parentEmail: r.parentEmail,
+                    parentName: r.parentName,
+                    childName: r.childName,
+                    itemName: r.itemName,
+                    dueDate: dueDate.toISOString(),
+                  }),
+                });
 
-              console.log(
-                `✅ Due reminder sent for ${r.itemName} (${r.parentEmail})`
-              );
+                if (!resp.ok) throw new Error(`Email API failed: ${resp.status}`);
+
+                console.log(`✅ Due reminder sent for ${r.itemName} (${r.parentEmail})`);
+              } catch (err) {
+                // If sending failed, unlock so it can retry later
+                await updateDoc(doc(db, "reservations", r.id), { dueReminderSent: false });
+                console.error("Due reminder email send failed:", err);
+              }
             }
+
+          }
+
+
+          // ===============================
+          // 3-DAYS PAST DUE EMAIL (ONCE)
+          // ===============================
+          if (
+            r.status === "Due" &&
+            r.dueDate &&
+            typeof r.dueDate.toDate === "function" &&
+            r.overdue3DaySent !== true
+          ) {
+            const dueDate = r.dueDate.toDate();
+
+            const msPerDay = 1000 * 60 * 60 * 24;
+            const daysPastDue = Math.floor(
+              (now.getTime() - dueDate.getTime()) / msPerDay
+            );
+
+            if (daysPastDue >= 3) {
+              // 1) claim lock (only one admin wins)
+              const claimed = await claimEmailLock(r.id, "overdue3DaySent");
+              if (!claimed) return;
+
+              try {
+                const resp = await fetch(`${EMAIL_API_BASE}/email/overdue-3days`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    parentEmail: r.parentEmail,
+                    parentName: r.parentName,
+                    childName: r.childName,
+                    itemName: r.itemName,
+                    dueDate: dueDate.toISOString(),
+                    daysPastDue,
+                    bagNo: r.bagNo || "",
+                  }),
+                });
+
+                if (!resp.ok) throw new Error(`Email API failed: ${resp.status}`);
+
+                console.log(`📧 3-day overdue email sent for ${r.itemName} (${r.parentEmail})`);
+              } catch (err) {
+                // If sending failed, unlock so it can retry later
+                await updateDoc(doc(db, "reservations", r.id), { overdue3DaySent: false });
+                console.error("Overdue 3-day email send failed:", err);
+              }
+            }
+
           }
         } catch (err) {
           console.error("Reminder/Due check error:", err);
         }
       });
     });
+
 
         const unsubWish = onSnapshot(collection(db, "wishlists"), (snap) => {
           setWishlist(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -278,6 +346,7 @@ export default function Admin() {
         });
 
         return () => {
+          unsubItems();
           unsubRes();
           unsubWish();
           unsubArch();
@@ -389,8 +458,9 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
     const qty = Number(formData.quantity) || 0;
     const totalQty = Number(formData.totalQuantity) || qty;
 
-    const computedStatus =     
-        formData.status === "Not Available"
+    const safeQty = Math.min(qty, totalQty);
+    const computedStatus =
+      formData.status === "Not Available"
         ? "Not Available"
         : safeQty === 0
         ? "On Loan"
@@ -398,7 +468,7 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
 
     await addDoc(collection(db, "items"), {
       ...formData,
-      quantity: qty,
+      quantity: safeQty,
       totalQuantity: totalQty,
       status: computedStatus,
       createdAt: serverTimestamp(),
@@ -429,7 +499,12 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
     const totalQty = Number(formData.totalQuantity) || 0;
 
     const safeQty = Math.min(qty, totalQty);
-    const computedStatus = safeQty === 0 ? "On Loan" : "Available";
+    const computedStatus =
+      formData.status === "Not Available"
+        ? "Not Available"
+        : safeQty === 0
+        ? "On Loan"
+        : "Available";
 
     await updateDoc(doc(db, "items", editingItem.id), {
       ...formData,
@@ -485,21 +560,33 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
     try {
       // 1) Returned: increment stock + archive + delete reservation + email
       if (newStatus === "Returned") {
+      // restore stock only if it was committed
+      if (reservation.inventoryCommitted) {
         await incrementItemQuantity(reservation.itemId);
+      }
 
-        const { id, bagNo, ...cleanReservation } = reservation;
+      //Only send "Returned" email if it was actually loaned out
+      const wasLoaned =
+        reservation.status === "On Loan" ||
+        reservation.status === "Due" ||
+        reservation.status === "Review Return" ||
+        !!reservation.loanStartDate;
 
-        await addDoc(collection(db, "archives"), {
-          ...cleanReservation,
-          bagNo: bagNo || null,
-          status: "Returned",
-          archivedAt: serverTimestamp(),
-          loanStartDate: reservation.loanStartDate ?? null,
-          note: reservation.note ?? "",
-        });
+      const { id, bagNo, ...cleanReservation } = reservation;
 
-        await deleteDoc(doc(db, "reservations", reservation.id));
+      await addDoc(collection(db, "archives"), {
+        ...cleanReservation,
+        bagNo: bagNo || null,
+        status: "Returned",
+        archivedAt: serverTimestamp(),
+        loanStartDate: reservation.loanStartDate ?? null,
+        note: reservation.note ?? "",
+      });
 
+      await deleteDoc(doc(db, "reservations", reservation.id));
+
+      // Email only if it was loaned
+      if (wasLoaned) {
         await sendStatusEmail({
           parentEmail: reservation.parentEmail,
           parentName: reservation.parentName,
@@ -508,14 +595,13 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
           newStatus: "Returned",
           preferredDay: reservation.preferredDay || "",
         });
-
-        return;
       }
 
-      // On Loan: decrement stock + set dueDate (+14) + no email
-      if (newStatus === "On Loan") {
-        await decrementItemQuantity(reservation.itemId);
+      return;
+    }
 
+      // On Loan: DO NOT decrement stock anymore (already decremented at reservation creation)
+      if (newStatus === "On Loan") {
         const start = new Date();
         const due = new Date(start);
         due.setDate(start.getDate() + 14);
@@ -525,11 +611,12 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
           loanStartDate: serverTimestamp(),
           dueDate: Timestamp.fromDate(due),
           dueReminderSent: false,
+          overdue3DaySent: false,
           extended: false,
         });
-
         return;
       }
+
 
       //Review Return: just mark status, do NOT increment stock, do NOT archive/delete, do NOT email
       if (newStatus === "Review Return") {
@@ -581,6 +668,7 @@ const handleExtendLoan = async (reservation) => {
     await updateDoc(doc(db, "reservations", reservation.id), {
       dueDate: Timestamp.fromDate(newDue), // Firestore Timestamp
       dueReminderSent: false,              // reset reminder
+      overdue3DaySent: false,
       extended: true,                      // label flag
       extendedAt: serverTimestamp(),       // optional audit
       status: "On Loan",
@@ -634,20 +722,30 @@ const handleExtendLoan = async (reservation) => {
     const { id, ...clean } = payload;
 
     try {
-      // ===== NEW: Reservations -> Waitlist =====
+     
       if (mode === "moveResToWaitlist") {
-        await addDoc(collection(db, "wishlists"), {
-          ...clean,
-          createdAt: payload.createdAt || serverTimestamp(),
-        });
-        await deleteDoc(doc(db, "reservations", id));
-      }   
+      // restore stock because this active reservation is being removed
+      if (payload.inventoryCommitted) {
+        await incrementItemQuantity(payload.itemId);
+      }
+
+      await addDoc(collection(db, "wishlists"), {
+        ...clean,
+        createdAt: payload.createdAt || serverTimestamp(),
+      });
+
+      await deleteDoc(doc(db, "reservations", id));
+    }
+
 
       // ===== NEW: Reservations -> Archive
-      else if (mode === "moveResToArchive") {
-        const reason = payload.archiveReason || "Archived";
+        else if (mode === "moveResToArchive") {
+        // restore stock because this active reservation is being removed
+        if (payload.inventoryCommitted) {
+          await incrementItemQuantity(payload.itemId);
+        }
 
-      // remove archiveReason from document clean (so it doesn't duplicate if you don't want it)
+        const reason = payload.archiveReason || "Archived";
         const { archiveReason, ...cleanNoReason } = payload;
 
         await addDoc(collection(db, "archives"), {
@@ -657,11 +755,18 @@ const handleExtendLoan = async (reservation) => {
           loanStartDate: payload.loanStartDate ?? null,
           note: payload.note ?? "",
         });
+ 
         await deleteDoc(doc(db, "reservations", id));
       }
 
+
       // ===== NEW: Reservation delete (still archives) =====
       else if (mode === "deleteReservation") {
+        // restore stock because this active reservation is being removed
+        if (payload.inventoryCommitted) {
+          await incrementItemQuantity(payload.itemId);
+        }
+
         await addDoc(collection(db, "archives"), {
           ...clean,
           archivedAt: serverTimestamp(),
@@ -669,29 +774,103 @@ const handleExtendLoan = async (reservation) => {
           loanStartDate: payload.loanStartDate ?? null,
           note: payload.note ?? "",
         });
+
         await deleteDoc(doc(db, "reservations", id));
       }
 
       // ===== Existing wishlist/archive actions (unchanged) =====
       else if (mode === "convertWishlist") {
-        await addDoc(collection(db, "reservations"), {
-          ...clean,
-          status: "Pending",
-          createdAt: payload.createdAt || serverTimestamp(),
+        const itemRef = doc(db, "items", payload.itemId);
+        const reservationRef = doc(collection(db, "reservations"));
+
+        const result = await runTransaction(db, async (tx) => {
+          const itemSnap = await tx.get(itemRef);
+          if (!itemSnap.exists()) throw new Error("Item not found");
+
+          const item = itemSnap.data();
+          const qty = Number(item.quantity ?? 0);
+
+          if (qty <= 0) return { type: "no_stock" };
+
+          const newQty = qty - 1;
+
+          // keep "Not Available" if admin locked it
+          const currentStatus = String(item.status || "");
+          const nextStatus =
+            currentStatus === "Not Available"
+              ? "Not Available"
+              : newQty === 0
+              ? "On Loan"
+              : "Available";
+
+          tx.update(itemRef, { quantity: newQty, status: nextStatus });
+
+          tx.set(reservationRef, {
+            ...clean,
+            status: "Pending",
+            createdAt: payload.createdAt || serverTimestamp(),
+            inventoryCommitted: true,
+          });
+
+          return { type: "ok" };
         });
+
+        if (result.type === "no_stock") {
+          alert("No copies available right now. Keep on waitlist.");
+          return;
+        }
+
         await deleteDoc(doc(db, "wishlists", id));
         setActiveTab("reservations");
-      } else if (mode === "deleteWishlist") {
+      }
+
+      
+      else if (mode === "deleteWishlist") {
         await deleteDoc(doc(db, "wishlists", id));
-      } else if (mode === "restoreArchive") {
-        await addDoc(collection(db, "reservations"), {
-          ...clean,
-          status: "Pending",
-          createdAt: payload.createdAt || serverTimestamp(),
+      }else if (mode === "restoreArchive") {
+        const itemRef = doc(db, "items", payload.itemId);
+        const reservationRef = doc(collection(db, "reservations"));
+
+        const result = await runTransaction(db, async (tx) => {
+          const itemSnap = await tx.get(itemRef);
+          if (!itemSnap.exists()) throw new Error("Item not found");
+
+          const item = itemSnap.data();
+          const qty = Number(item.quantity ?? 0);
+
+          if (qty <= 0) return { type: "no_stock" };
+
+          const newQty = qty - 1;
+
+          // keep "Not Available" if admin locked it
+          const currentStatus = String(item.status || "");
+          const nextStatus =
+            currentStatus === "Not Available"
+              ? "Not Available"
+              : newQty === 0
+              ? "On Loan"
+              : "Available";
+
+          tx.update(itemRef, { quantity: newQty, status: nextStatus });
+
+          tx.set(reservationRef, {
+            ...clean,
+            status: "Pending",
+            createdAt: payload.createdAt || serverTimestamp(),
+            inventoryCommitted: true,
+          });
+
+          return { type: "ok" };
         });
+
+        if (result.type === "no_stock") {
+          alert("No copies available right now. Cannot restore to Reservations.");
+          return;
+        }
+
         await deleteDoc(doc(db, "archives", id));
         setActiveTab("reservations");
-      } else if (mode === "deleteArchive") {
+      }else if (mode === "deleteArchive") {
         await deleteDoc(doc(db, "archives", id));
       }
     } catch (err) {
@@ -767,8 +946,10 @@ const handleExtendLoan = async (reservation) => {
   // - only items with status === "Available"
   // - use their current quantity
   const totalAvailable = items.reduce((sum, i) => {
-    if (i.status === "Available") return sum + (i.quantity ?? 0);
-    return sum;
+    const status = String(i.status || "");
+    if (status === "Not Available") return sum;        // locked out
+    const qty = Number(i.quantity ?? 0);
+    return sum + (qty > 0 ? qty : 0);                  // count real available copies
   }, 0);
 
   // Optional: show how many copies are currently loaned out (based on stock math)
