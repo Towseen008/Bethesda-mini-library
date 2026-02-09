@@ -220,120 +220,118 @@ export default function Admin() {
 
       const now = new Date();
 
-      data.forEach(async (r) => {
-        try {
-          // ===============================
-          // AUTO MARK DUE (after 14 days)
-          // ===============================
-          if (
-            r.status === "On Loan" &&
-            r.dueDate &&
-            typeof r.dueDate.toDate === "function" &&
-            r.dueDate.toDate() < now
-          ) {
-            await updateDoc(doc(db, "reservations", r.id), {
-              status: "Due",
-              dueReminderSent: true,
-              overdue3DaySent: false, 
-            });
-          }
+      (async () => {
+        for (const r of data) {
+          try {
+            // ===============================
+            // AUTO MARK DUE (if due date passed)
+            // ===============================
+            if (
+              r.status === "On Loan" &&
+              r.dueDate &&
+              typeof r.dueDate.toDate === "function" &&
+              r.dueDate.toDate() < now
+            ) {
+              await updateDoc(doc(db, "reservations", r.id), {
+                status: "Due",
+                dueReminderSent: true,
+                overdue3DaySent: false,
+              });
 
-          // ===============================
-          // 2-DAY REMINDER EMAIL (ONCE)
-          // ===============================
-          if (
-            (r.status === "On Loan" || r.status === "Due") &&
-            r.dueDate &&
-            typeof r.dueDate.toDate === "function" &&
-            r.dueReminderSent !== true
-          ) {
-            const dueDate = r.dueDate.toDate();
-            const diffInDays = Math.ceil(
-              (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-            );
+              r.status = "Due";
+            }
 
-            if (diffInDays <= 2 && diffInDays > 0) {
-              // 1) claim lock (only one admin wins)
-              const claimed = await claimEmailLock(r.id, "dueReminderSent");
-              if (!claimed) return; // someone else already claimed it
+            // ===============================
+            // 2-DAY REMINDER EMAIL (ONCE)
+            // ===============================
+            if (
+              (r.status === "On Loan" || r.status === "Due") &&
+              r.dueDate &&
+              typeof r.dueDate.toDate === "function" &&
+              r.dueReminderSent !== true
+            ) {
+              const dueDate = r.dueDate.toDate();
+              const diffInDays = Math.ceil(
+                (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+              );
 
-              try {
-                const resp = await fetch(`${EMAIL_API_BASE}/email/due-reminder`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    parentEmail: r.parentEmail,
-                    parentName: r.parentName,
-                    childName: r.childName,
-                    itemName: r.itemName,
-                    dueDate: dueDate.toISOString(),
-                  }),
-                });
+              if (diffInDays <= 2 && diffInDays > 0) {
+                const claimed = await claimEmailLock(r.id, "dueReminderSent");
+                if (!claimed) continue;
 
-                if (!resp.ok) throw new Error(`Email API failed: ${resp.status}`);
+                try {
+                  const resp = await fetch(`${EMAIL_API_BASE}/email/due-reminder`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      parentEmail: r.parentEmail,
+                      parentName: r.parentName,
+                      childName: r.childName,
+                      itemName: r.itemName,
+                      dueDate: dueDate.toISOString(),
+                    }),
+                  });
 
-                console.log(`✅ Due reminder sent for ${r.itemName} (${r.parentEmail})`);
-              } catch (err) {
-                // If sending failed, unlock so it can retry later
-                await updateDoc(doc(db, "reservations", r.id), { dueReminderSent: false });
-                console.error("Due reminder email send failed:", err);
+                  if (!resp.ok) throw new Error(`Email API failed: ${resp.status}`);
+                } catch (err) {
+                  await updateDoc(doc(db, "reservations", r.id), {
+                    dueReminderError: String(err?.message || err),
+                    dueReminderErrorAt: serverTimestamp(),
+                  });
+                  console.error("Due reminder email send failed:", err);
+                }
               }
             }
 
-          }
+            // ===============================
+            // 3-DAYS PAST DUE EMAIL (ONCE)
+            // ===============================
+            if (
+              r.status === "Due" &&
+              r.dueDate &&
+              typeof r.dueDate.toDate === "function" &&
+              r.overdue3DaySent !== true
+            ) {
+              const dueDate = r.dueDate.toDate();
+              const msPerDay = 1000 * 60 * 60 * 24;
+              const daysPastDue = Math.floor(
+                (now.getTime() - dueDate.getTime()) / msPerDay
+              );
 
+              if (daysPastDue >= 3) {
+                const claimed = await claimEmailLock(r.id, "overdue3DaySent");
+                if (!claimed) continue;
 
-          // ===============================
-          // 3-DAYS PAST DUE EMAIL (ONCE)
-          // ===============================
-          if (
-            r.status === "Due" &&
-            r.dueDate &&
-            typeof r.dueDate.toDate === "function" &&
-            r.overdue3DaySent !== true
-          ) {
-            const dueDate = r.dueDate.toDate();
+                try {
+                  const resp = await fetch(`${EMAIL_API_BASE}/email/overdue-3days`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      parentEmail: r.parentEmail,
+                      parentName: r.parentName,
+                      childName: r.childName,
+                      itemName: r.itemName,
+                      dueDate: dueDate.toISOString(),
+                      daysPastDue,
+                      bagNo: r.bagNo || "",
+                    }),
+                  });
 
-            const msPerDay = 1000 * 60 * 60 * 24;
-            const daysPastDue = Math.floor(
-              (now.getTime() - dueDate.getTime()) / msPerDay
-            );
-
-            if (daysPastDue >= 3) {
-              // 1) claim lock (only one admin wins)
-              const claimed = await claimEmailLock(r.id, "overdue3DaySent");
-              if (!claimed) return;
-
-              try {
-                const resp = await fetch(`${EMAIL_API_BASE}/email/overdue-3days`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    parentEmail: r.parentEmail,
-                    parentName: r.parentName,
-                    childName: r.childName,
-                    itemName: r.itemName,
-                    dueDate: dueDate.toISOString(),
-                    daysPastDue,
-                    bagNo: r.bagNo || "",
-                  }),
-                });
-
-                if (!resp.ok) throw new Error(`Email API failed: ${resp.status}`);
-
-                console.log(`📧 3-day overdue email sent for ${r.itemName} (${r.parentEmail})`);
-              } catch (err) {
-                // If sending failed, unlock so it can retry later
-                await updateDoc(doc(db, "reservations", r.id), { overdue3DaySent: false });
-                console.error("Overdue 3-day email send failed:", err);
+                  if (!resp.ok) throw new Error(`Email API failed: ${resp.status}`);
+                } catch (err) {
+                  await updateDoc(doc(db, "reservations", r.id), {
+                    overdue3DayError: String(err?.message || err),
+                    overdue3DayErrorAt: serverTimestamp(),
+                  });
+                  console.error("Overdue 3-day email send failed:", err);
+                }
               }
             }
-
+          } catch (err) {
+            console.error("Reminder/Due check error:", err);
           }
-        } catch (err) {
-          console.error("Reminder/Due check error:", err);
         }
-      });
+      })();
     });
 
 
@@ -943,8 +941,6 @@ const handleExtendLoan = async (reservation) => {
   /* ------------------- SUMMARY COUNTS (FIXED) ------------------- */
   const totalInventory = items.reduce((sum, i) => sum + (i.totalQuantity ?? 0), 0);
   // Copies that are actually available for borrowing NOW:
-  // - only items with status === "Available"
-  // - use their current quantity
   const totalAvailable = items.reduce((sum, i) => {
     const status = String(i.status || "");
     if (status === "Not Available") return sum;        // locked out
@@ -952,14 +948,16 @@ const handleExtendLoan = async (reservation) => {
     return sum + (qty > 0 ? qty : 0);                  // count real available copies
   }, 0);
 
-  // Optional: show how many copies are currently loaned out (based on stock math)
-  const totalInStock = items.reduce((sum, i) => sum + (i.quantity ?? 0), 0);
-  const totalLoaned = Math.max(totalInventory - totalInStock, 0);
+  const itemsOnLoan = reservations.filter((r) =>
+    ["On Loan", "Due"].includes(r.status)
+  ).length;
 
   const pending = reservations.filter((r) => r.status === "Pending").length;
   const ready = reservations.filter((r) => r.status === "Ready for Pickup").length;
+  const loanInProcess = reservations.filter((r) =>
+    ["Pending", "Ready for Pickup", "Review Return"].includes(r.status)
+  ).length;
   const waitlistCount = wishlist.length;
-
   const dueCount = reservations.filter((r) => r.status === "Due").length;
 
   /* ------------------- LOGOUT ------------------- */
@@ -1005,7 +1003,7 @@ const handleExtendLoan = async (reservation) => {
         />
         <SectionCard
           label="Items On Loan"
-          value={totalLoaned}
+          value={itemsOnLoan}
           border="border-red-600"
         />
         <SectionCard
@@ -1017,6 +1015,11 @@ const handleExtendLoan = async (reservation) => {
           label="Ready for Pickup"
           value={ready}
           border="border-green-400"
+        />
+        <SectionCard
+          label="Loan in Process"
+          value={loanInProcess}
+          border="border-slate-700"
         />
         <SectionCard
           label="Waitlist Requests"

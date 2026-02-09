@@ -121,11 +121,19 @@ export default function Reserve() {
 
       const newQty = qty - 1;
 
+      const currentStatus = String(latest.status || "");
+      const nextStatus =
+        currentStatus.toLowerCase() === "not available"
+          ? "Not Available"
+          : newQty === 0
+          ? "On Loan"
+          : "Available";
+
       tx.update(itemRef, {
         quantity: newQty,
-        // IMPORTANT: do NOT change admin workflow statuses here
-        // item.status can remain whatever admin uses; public site uses quantity
+        status: nextStatus,
       });
+
 
       tx.set(reservationRef, {
         itemId: id,
