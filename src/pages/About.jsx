@@ -36,9 +36,9 @@ export default function AboutUs() {
         </h1>
 
         <p className="text-gray-700 leading-relaxed mb-3">
-          The Toy Lending Library is a community toy and learning resource
+          The Toy Lending Library is a Bethesda Community Resource
           supporting children and families through play, learning, and
-          inclusion in the Niagara region.
+          inclusion throughout the Niagara region.
         </p>
 
         <p className="text-gray-700 leading-relaxed mb-3">
@@ -71,9 +71,8 @@ export default function AboutUs() {
             Who We Serve
           </h2>
           <p className="text-gray-700 leading-relaxed">
-            We support families, caregivers, and children across the Niagara
-            region, including children with diverse learning and developmental
-            needs.
+            We support Children and Families across the Niagara Region, currently
+            registered with Bethesda Community Services.
           </p>
         </div>
       </section>

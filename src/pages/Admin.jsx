@@ -1356,8 +1356,18 @@ const handleExtendLoan = async (reservation) => {
 
       {/* EDIT TOY MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 px-3">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-3 py-6">
+          <div
+            className="absolute inset-0"
+            onClick={() => {
+              setIsModalOpen(false);
+              setEditingItem(null);
+              setFormData(INITIAL_FORM_STATE);
+            }}
+          />
+
+          {/* modal card */}
+          <div className="relative bg-white rounded-lg w-full max-w-lg max-h-[85vh] overflow-y-auto p-6">
             <ToyForm
               formData={formData}
               title="Edit Toy"
@@ -1371,14 +1381,15 @@ const handleExtendLoan = async (reservation) => {
               onRemoveImage={removeImage}
             />
 
-            <div className="flex justify-end mt-3">
+            {/* sticky-ish footer (optional): keeps buttons visible */}
+            <div className="flex justify-end gap-2 mt-3 pt-3 border-t bg-white">
               <button
                 onClick={() => {
                   setIsModalOpen(false);
                   setEditingItem(null);
                   setFormData(INITIAL_FORM_STATE);
                 }}
-                className="px-3 py-1 border rounded mr-2"
+                className="px-3 py-1 border rounded"
               >
                 Cancel
               </button>

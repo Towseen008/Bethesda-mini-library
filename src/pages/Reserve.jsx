@@ -8,7 +8,6 @@ import {
   addDoc,
   collection,
   serverTimestamp,
-  runTransaction,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import Spinner from "../components/Spinner";
@@ -92,113 +91,67 @@ export default function Reserve() {
       SUBMIT RESERVATION
   ----------------------------------------------------------- */
   const submitReservation = async (e) => {
-  e.preventDefault();
-  if (!item || submitting) return;
+    e.preventDefault();
+    if (!item || submitting) return;
 
-  setSubmitting(true);
+    setSubmitting(true);
 
-  try {
-    const itemRef = doc(db, "items", id);
-    const reservationRef = doc(collection(db, "reservations")); // create ID first
-
-    const result = await runTransaction(db, async (tx) => {
-      const itemSnap = await tx.get(itemRef);
-      if (!itemSnap.exists()) throw new Error("Item not found");
-
-      const latest = itemSnap.data();
-
-      // block if admin marked Not Available
-      if (isNotAvailableStatus(latest.status)) {
-        return { type: "not_available" };
-      }
-
-      const qty = Number(latest.quantity ?? 0);
-
-      // if no inventory, do not create reservation, return "waitlist"
-      if (qty <= 0) {
-        return { type: "waitlist" };
-      }
-
-      const newQty = qty - 1;
-
-      const currentStatus = String(latest.status || "");
-      const nextStatus =
-        currentStatus.toLowerCase() === "not available"
-          ? "Not Available"
-          : newQty === 0
-          ? "On Loan"
-          : "Available";
-
-      tx.update(itemRef, {
-        quantity: newQty,
-        status: nextStatus,
+    try {
+      const res = await fetch(`${EMAIL_API_BASE}/reservation/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: id,
+          parentName: formData.parentName,
+          parentEmail: formData.parentEmail,
+          childName: formData.childName,
+          preferredDay: formData.preferredDay,
+          note: formData.note,
+        }),
       });
 
+      const data = await res.json().catch(() => ({}));
 
-      tx.set(reservationRef, {
-        itemId: id,
-        itemName: latest.name,
-        parentName: formData.parentName,
-        parentEmail: formData.parentEmail,
-        childName: formData.childName,
-        preferredDay: formData.preferredDay,
-        note: formData.note || "",
-        status: "Pending",
-        createdAt: serverTimestamp(),
-        inventoryCommitted: true, 
+      if (!res.ok) {
+        if (data?.type === "not_available") {
+          alert("This toy is temporarily unavailable and can’t be reserved right now.");
+        } else {
+          alert(data?.error || "Error creating reservation.");
+        }
+        setSubmitting(false);
+        return;
+      }
+
+      if (data.type === "waitlist") {
+        alert("This toy is currently on loan. We’ll add you to the waitlist now.");
+        try {
+          await submitWaitlist(null, true);
+        } finally {
+          setSubmitting(false);
+        }
+        return;
+      }
+
+      // Reserved
+      navigate("/confirmation", {
+        state: { type: "reservation", itemName: data.itemName || item.name },
       });
 
-      return { type: "reserved" };
-    });
-
-    // Handle outcomes
-    if (result.type === "not_available") {
-      alert("This toy is temporarily unavailable and can’t be reserved right now.");
       setSubmitting(false);
-      return;
-    }
-
-    if (result.type === "waitlist") {
-      // allow waitlist submission to proceed
+    } catch (err) {
+      console.error("Network error:", err);
+      alert("Network error creating reservation.");
       setSubmitting(false);
-      await submitWaitlist(e);
-      return;
     }
-
-    // ✅ Navigate immediately
-    navigate("/confirmation", {
-      state: { type: "reservation", itemName: item.name },
-    });
-
-    // 🔔 Fire-and-forget email
-    sendEmail("/email/reservation-created", {
-      parentEmail: formData.parentEmail,
-      parentName: formData.parentName,
-      childName: formData.childName,
-      itemName: item.name,
-      preferredDay: formData.preferredDay || "Not specified",
-      note: formData.note || "",
-    });
-  } catch (err) {
-    console.error("Error submitting reservation:", err);
-    alert("Error creating reservation.");
-    setSubmitting(false);
-  }
-};
+  };
 
   /* -----------------------------------------------------------
       SUBMIT WAITLIST
   ----------------------------------------------------------- */
-  const submitWaitlist = async (e) => {
-    e.preventDefault();
-    if (!item || submitting) return;
-    if (isNotAvailableStatus(item.status)) {
-      alert("This toy is temporarily unavailable and can’t be waitlisted right now.");
-      setSubmitting(false);
-      return;
-    }
+  const submitWaitlist = async (e, skipPreventDefault = false) => {
+    if (!skipPreventDefault) e.preventDefault();
 
-    setSubmitting(true);
+    if (!item) return;
 
     try {
       await addDoc(collection(db, "wishlists"), {
@@ -212,12 +165,11 @@ export default function Reserve() {
         createdAt: serverTimestamp(),
       });
 
-      // ✅ Navigate immediately
       navigate("/confirmation", {
         state: { type: "waitlist", itemName: item.name },
       });
 
-      // 🔔 Fire-and-forget email
+      // fire-and-forget email
       sendEmail("/email/waitlist-created", {
         parentEmail: formData.parentEmail,
         parentName: formData.parentName,
@@ -227,8 +179,7 @@ export default function Reserve() {
       });
     } catch (err) {
       console.error("Error submitting waitlist:", err);
-      alert("Error adding to waitlist.");
-      setSubmitting(false);
+      alert(err?.message || "Error adding to waitlist.");
     }
   };
 
@@ -288,10 +239,9 @@ export default function Reserve() {
       )}
 
       <form
-        onSubmit={isNotAvailable ? (e) => e.preventDefault() : isOnLoan ? submitWaitlist : submitReservation
-        }
+        onSubmit={isNotAvailable ? (e) => e.preventDefault() : submitReservation}
         className={`space-y-4 ${isNotAvailable ? "opacity-60 pointer-events-none" : ""}`}
-       >
+      >
 
          {/* Parent Name */}
             <div>
@@ -350,7 +300,6 @@ export default function Reserve() {
                   min={today}
                   value={formData.preferredDay}
                   onChange={handleChange}
-                  required
                   className="w-full border rounded px-3 py-2"
                 />
               </div>

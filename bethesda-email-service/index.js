@@ -3,8 +3,24 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { Resend } from "resend";
+import admin from "firebase-admin";
 
 dotenv.config();
+
+// ===============================
+// FIREBASE ADMIN INIT (SERVER ONLY)
+// ===============================
+if (!admin.apps.length) {
+  const serviceAccount = JSON.parse(
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  );
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
+
+const adb = admin.firestore();
 
 const app = express();
 
@@ -422,6 +438,102 @@ app.post("/email/overdue-3days", async (req, res) => {
   } catch (err) {
     console.error("Overdue 3-days email error:", err);
     res.status(500).json({ error: "Failed to send overdue email" });
+  }
+});
+
+/* ======================================================
+   ROUTE: Create Reservation + Lock Inventory (NO DOUBLE BOOKING)
+====================================================== */
+app.post("/reservation/create", async (req, res) => {
+  try {
+    const {
+      itemId,
+      parentName,
+      parentEmail,
+      childName,
+      preferredDay,
+      note,
+    } = req.body;
+
+    if (!itemId || !parentEmail || !parentName || !childName) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const itemRef = adb.collection("items").doc(itemId);
+    const reservationRef = adb.collection("reservations").doc(); // generate ID
+
+    const outcome = await adb.runTransaction(async (tx) => {
+      const snap = await tx.get(itemRef);
+      if (!snap.exists) return { type: "not_found" };
+
+      const item = snap.data();
+      const status = String(item.status || "");
+      const qty = Number(item.quantity ?? 0);
+
+      // block Not Available
+      if (status.toLowerCase() === "not available") {
+        return { type: "not_available" };
+      }
+
+      // out of stock => waitlist
+      if (qty <= 0) {
+        return { type: "waitlist", itemName: item.name };
+      }
+
+      // lock inventory
+      const newQty = qty - 1;
+      const nextStatus = newQty === 0 ? "On Loan" : "Available";
+
+      tx.update(itemRef, { quantity: newQty, status: nextStatus });
+
+      tx.set(reservationRef, {
+        itemId,
+        itemName: item.name,
+        parentName,
+        parentEmail,
+        childName,
+        preferredDay: preferredDay || "",
+        note: note || "",
+        status: "Pending",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        inventoryCommitted: true,
+      });
+
+      return { type: "reserved", itemName: item.name, reservationId: reservationRef.id };
+    });
+
+    if (outcome.type === "not_found") {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
+    if (outcome.type === "not_available") {
+      return res.status(409).json({ type: "not_available" });
+    }
+
+    if (outcome.type === "waitlist") {
+      return res.status(200).json({ type: "waitlist", itemName: outcome.itemName });
+    }
+
+    // Fire-and-forget email (don’t block reservation if email fails)
+    sendEmail({
+      to: parentEmail,
+      subject: `Reservation received for "${outcome.itemName}"`,
+      html: renderBrandedEmail({
+        title: "Reservation Received",
+        content: `
+          <p>Hi ${parentName},</p>
+          <p>We have received your reservation for <strong>${outcome.itemName}</strong> for ${childName}.</p>
+          <p>Preferred pick-up day: <strong>${preferredDay || "Not specified"}</strong>.</p>
+          ${note ? `<p><strong>Your note:</strong><br/>${String(note).replace(/\n/g, "<br/>")}</p>` : ""}
+          <p>We will email you when the toy is <strong>ready for pickup</strong>.</p>
+        `,
+      }),
+    }).catch((e) => console.error("Email failed:", e));
+
+    return res.json({ type: "reserved", itemName: outcome.itemName, reservationId: outcome.reservationId });
+  } catch (err) {
+    console.error("Create reservation error:", err);
+    return res.status(500).json({ error: "Failed to create reservation" });
   }
 });
 
