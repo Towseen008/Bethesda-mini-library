@@ -57,7 +57,7 @@ export default function Reserve() {
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false); // ✅ prevent double submit
+  const [submitting, setSubmitting] = useState(false); // prevent double submit
 
   const [formData, setFormData] = useState({
     parentName: "",
@@ -66,6 +66,8 @@ export default function Reserve() {
     preferredDay: "",
     note: "",
   });
+
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   /* ------------------ LOAD ITEM ------------------ */
   useEffect(() => {
@@ -93,6 +95,11 @@ export default function Reserve() {
   const submitReservation = async (e) => {
     e.preventDefault();
     if (!item || submitting) return;
+
+    if (!termsAccepted) {
+      alert("Please read and accept the Toy Lending Library Terms & Conditions before continuing.");
+      return;
+    }
 
     setSubmitting(true);
 
@@ -152,6 +159,11 @@ export default function Reserve() {
     if (!skipPreventDefault) e.preventDefault();
 
     if (!item) return;
+
+    if (!termsAccepted) {
+      alert("Please read and accept the Toy Lending Library Terms & Conditions before continuing.");
+      return;
+    }
 
     try {
       await addDoc(collection(db, "wishlists"), {
@@ -318,20 +330,58 @@ export default function Reserve() {
                 className="w-full border rounded px-3 py-2"
               />
             </div>
+
+            {/* Terms and Conditions */}
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5 shadow-sm">
+              <h3 className="text-base sm:text-lg font-bold text-bethDeepBlue mb-3">
+                Toy Lending Terms & Conditions
+              </h3>
+
+              <div className="text-sm sm:text-base text-gray-700 space-y-2 leading-6 max-h-64 overflow-y-auto pr-1">
+                <p>By registering, I agree that:</p>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>I have a child under the age of 18 that is registered with Bethesda Children and Youth Services.</li>
+                  <li>I understand that borrowing toys may carry some risk, and I choose which toys are appropriate for my family.</li>
+                  <li>I understand that all toys must be used under adult supervision.</li>
+                  <li>Toys will be used as intended and returned on time in their designated bags (if applicable).</li>
+                  <li>I agree to take reasonable care of borrowed toys.</li>
+                  <li>I voluntarily assume all risks associated with the use of toys borrowed from the Toy Lending Library.</li>
+                  <li>I understand that failure to follow these terms may result in suspension or loss of borrowing privileges.</li>
+                </ul>
+              </div>
+
+              <label className="mt-4 flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3 cursor-pointer hover:border-bethDeepBlue transition">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-1 h-5 w-5 accent-bethDeepBlue shrink-0"
+                />
+                <span className="text-sm sm:text-base text-gray-800 leading-6">
+                  <span className="font-semibold text-bethDeepBlue">Acknowledgment:</span>{" "}
+                  I have read, understand, and agree to the Toy Lending Library Terms & Conditions.
+                </span>
+              </label>
+            </div>
+
             {/* Button just disabled during submit */}
               <button
-                    type="submit"
-                    disabled={submitting || isNotAvailable}
-                    className={`w-full py-2 rounded text-white font-semibold ${
-                      isOnLoan
+                  type="submit"
+                  disabled={submitting || isNotAvailable || !termsAccepted}
+                  className={`w-full py-3 rounded-xl text-white font-semibold transition ${
+                  submitting || isNotAvailable || !termsAccepted
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : isOnLoan
                         ? "bg-purple-600 hover:bg-purple-700"
                         : "bg-bethDeepBlue hover:bg-bethLightBlue"
-                    }`}
+                  }`}
                 >
                   {submitting
                     ? "Submitting..."
                     : isNotAvailable
                     ? "Not Available"
+                    : !termsAccepted
+                    ? "Accept Terms to Continue"
                     : isOnLoan
                     ? "Join Waitlist"
                     : "Submit Reservation"
