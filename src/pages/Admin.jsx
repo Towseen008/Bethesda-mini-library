@@ -1,6 +1,6 @@
 // src/pages/Admin.jsx
 import { useState, useEffect } from "react";
-import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, onSnapshot, getDoc, Timestamp, runTransaction,
+import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, onSnapshot, getDoc, Timestamp, runTransaction,increment,
 } from "firebase/firestore";
 
 import { signOut } from "firebase/auth";
@@ -46,6 +46,18 @@ const sendStatusEmail = async (payload) => {
     });
   } catch (err) {
     console.error("Status email error:", err);
+  }
+};
+
+const sendReadyPickupExpiredEmail = async (payload) => {
+  try {
+    await fetch(`${EMAIL_API_BASE}/email/ready-pickup-expired`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.error("Ready for pickup expired email error:", err);
   }
 };
 
@@ -223,6 +235,69 @@ export default function Admin() {
       (async () => {
         for (const r of data) {
           try {
+
+            // ===============================
+            // READY FOR PICKUP EXPIRED (7 DAYS)
+            // ===============================
+            if (
+              r.status === "Ready for Pickup" &&
+              r.readyForPickupDate &&
+              typeof r.readyForPickupDate.toDate === "function" &&
+              r.readyPickupExpiredProcessed !== true
+            ) {
+              const readyDate = r.readyForPickupDate.toDate();
+              const msPerDay = 1000 * 60 * 60 * 24;
+              const daysWaiting = Math.floor(
+                (now.getTime() - readyDate.getTime()) / msPerDay
+              );
+
+              if (daysWaiting >= 7) {
+                const claimed = await claimEmailLock(
+                  r.id,
+                  "readyPickupExpiredProcessed"
+                );
+                if (!claimed) continue;
+
+                try {
+                  // restore stock only if this reservation had already reserved inventory
+                  if (r.inventoryCommitted) {
+                    await incrementItemQuantity(r.itemId);
+                  }
+
+                  // send email to parent
+                  await sendReadyPickupExpiredEmail({
+                    parentEmail: r.parentEmail,
+                    parentName: r.parentName,
+                    childName: r.childName,
+                    itemName: r.itemName,
+                  });
+
+                  // save record in archive
+                  const { id, ...cleanReservation } = r;
+
+                  await addDoc(collection(db, "archives"), {
+                    ...cleanReservation,
+                    status: "Returned to Circulation",
+                    archiveReason: "Ready for Pickup Expired",
+                    archivedAt: serverTimestamp(),
+                    loanStartDate: r.loanStartDate ?? null,
+                    note: `Auto-returned to inventory after 7 days with no pickup.`,
+                  });
+
+                  // remove from active reservations
+                  await deleteDoc(doc(db, "reservations", r.id));
+                } catch (err) {
+                  await updateDoc(doc(db, "reservations", r.id), {
+                    readyPickupExpiredProcessed: false,
+                    readyPickupExpiredError: String(err?.message || err),
+                    readyPickupExpiredErrorAt: serverTimestamp(),
+                  });
+
+                  console.error("Ready for Pickup expiry failed:", err);
+                }
+              }
+            }
+            
             // ===============================
             // AUTO MARK DUE (if due date passed)
             // ===============================
@@ -622,6 +697,25 @@ const handleSaveArchiveNote = async (archiveId, newNote) => {
           status: "Review Return",
           reviewReturnAt: serverTimestamp(),
         });
+        return;
+      }
+
+      if (newStatus === "Ready for Pickup") {
+        await updateDoc(doc(db, "reservations", reservation.id), {
+          status: "Ready for Pickup",
+          readyForPickupDate: serverTimestamp(),
+          readyPickupExpiredProcessed: false,
+        });
+
+        await sendStatusEmail({
+          parentEmail: reservation.parentEmail,
+          parentName: reservation.parentName,
+          childName: reservation.childName,
+          itemName: reservation.itemName,
+          newStatus: "Ready for Pickup",
+          preferredDay: reservation.preferredDay || "",
+        });
+
         return;
       }
 

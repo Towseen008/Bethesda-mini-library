@@ -147,7 +147,7 @@ app.post("/email/reservation-created", async (req, res) => {
       html: renderBrandedEmail({
         title: "Reservation Received",
         content: `
-          <p>Hi ${parentName || "there"},</p>
+          <p>Hi ${parentName || "Parent/Guardian" },</p>
           <p>
             We have received your reservation for
             <strong>${itemName}</strong>
@@ -207,7 +207,7 @@ app.post("/email/waitlist-created", async (req, res) => {
       html: renderBrandedEmail({
         title: "Waitlist Confirmation",
         content: `
-          <p>Hi ${parentName || "there"},</p>
+          <p>Hi ${parentName || "Parent/Guardian"},</p>
           <p>
             You have been added to the waitlist for
             <strong>${itemName}</strong>
@@ -272,7 +272,7 @@ app.post("/email/status-updated", async (req, res) => {
         title: "Your Toy is Ready for Pickup",
         showPickupInfo: true,
         content: `
-          <p>Hi ${parentName || "there"},</p>
+          <p>Hi ${parentName || "Parent/Guardian" },</p>
           <p>
             Great news! <strong>${itemName}</strong>
             ${childName ? `for ${childName}` : ""} is now
@@ -331,7 +331,7 @@ app.post("/email/due-reminder", async (req, res) => {
       html: renderBrandedEmail({
         title: "Toy Return Reminder",
         content: `
-          <p>Hi ${parentName || "there"},</p>
+          <p>Hi ${parentName || "Parent/Guardian"},</p>
 
           <p>
             This is a friendly reminder that the toy
@@ -398,7 +398,7 @@ app.post("/email/overdue-3days", async (req, res) => {
       html: renderBrandedEmail({
         title: "Overdue Toy Return Reminder",
         content: `
-          <p>Hi ${parentName || "there"},</p>
+          <p>Hi ${parentName || "Parent/Guardian" },</p>
 
           <p>
             This is a gentle reminder that the toy
@@ -438,6 +438,59 @@ app.post("/email/overdue-3days", async (req, res) => {
   } catch (err) {
     console.error("Overdue 3-days email error:", err);
     res.status(500).json({ error: "Failed to send overdue email" });
+  }
+});
+
+/* ======================================================
+   ROUTE: Expired Ready for Pickup Notice (7 Days Past)
+====================================================== */
+app.post("/email/ready-pickup-expired", async (req, res) => {
+  const { parentEmail, parentName, childName, itemName } = req.body;
+
+  try {
+    await resend.emails.send({
+      from: "Bethesda Lending Library <toylending@bethesdaservices.com>",
+      to: parentEmail,
+      subject: "Reservation returned to circulation",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+          <p>Hello ${parentName || "Parent/Guardian"},</p>
+
+          <p>
+            Your reservation for <strong>${itemName}</strong>
+            ${childName ? `for <strong>${childName}</strong>` : ""}
+            was not picked up within 7 days.
+          </p>
+
+          <p>
+            The item has now been returned to circulation and may need to be
+            reserved again if it is still needed.
+          </p>
+
+          <p>
+            If you would still like this item, please place a new reservation
+            through the Bethesda Lending Library.
+          </p>
+
+          <p>
+           <em>
+              Note: This is an automated reminder. If the toy has already been picked up or made arrangements with Admin,
+              please disregard this message.
+            </em>
+          </p>
+
+          <p>Thank you,<br />Bethesda Lending Library</p>
+        </div>
+      `,
+    });
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("ready-pickup-expired email error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message || "Failed to send ready pickup expired email",
+    });
   }
 });
 
