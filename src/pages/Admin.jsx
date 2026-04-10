@@ -50,15 +50,20 @@ const sendStatusEmail = async (payload) => {
 };
 
 const sendReadyPickupExpiredEmail = async (payload) => {
-  try {
-    await fetch(`${EMAIL_API_BASE}/email/ready-pickup-expired`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    console.error("Ready for pickup expired email error:", err);
+  const resp = await fetch(`${EMAIL_API_BASE}/email/ready-pickup-expired`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(
+      `Ready pickup expired email failed: ${resp.status} ${text}`
+    );
   }
+
+  return resp.json().catch(() => ({}));
 };
 
 /* ======================================================
@@ -259,18 +264,18 @@ export default function Admin() {
                 if (!claimed) continue;
 
                 try {
-                  // restore stock only if this reservation had already reserved inventory
-                  if (r.inventoryCommitted) {
-                    await incrementItemQuantity(r.itemId);
-                  }
-
-                  // send email to parent
+                  // send email to parent FIRST
                   await sendReadyPickupExpiredEmail({
                     parentEmail: r.parentEmail,
                     parentName: r.parentName,
                     childName: r.childName,
                     itemName: r.itemName,
                   });
+
+                  // restore stock only after email succeeds
+                  if (r.inventoryCommitted) {
+                    await incrementItemQuantity(r.itemId);
+                  }
 
                   // save record in archive
                   const { id, ...cleanReservation } = r;

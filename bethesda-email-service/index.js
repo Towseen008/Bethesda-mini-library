@@ -444,55 +444,58 @@ app.post("/email/overdue-3days", async (req, res) => {
 /* ======================================================
    ROUTE: Expired Ready for Pickup Notice (7 Days Past)
 ====================================================== */
-app.post("/email/ready-pickup-expired", async (req, res) => {
-  const { parentEmail, parentName, childName, itemName } = req.body;
+  app.post("/email/ready-pickup-expired", async (req, res) => {
+    try {
+      const { parentEmail, parentName, childName, itemName } = req.body;
 
-  try {
-    await resend.emails.send({
-      from: "Bethesda Lending Library <toylending@bethesdaservices.com>",
-      to: parentEmail,
-      subject: "Reservation returned to circulation",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-          <p>Hello ${parentName || "Parent/Guardian"},</p>
+      if (!parentEmail || !itemName) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
 
-          <p>
-            Your reservation for <strong>${itemName}</strong>
-            ${childName ? `for <strong>${childName}</strong>` : ""}
-            was not picked up within 7 days.
-          </p>
+      await sendEmail({
+        to: parentEmail,
+        subject: `Reservation returned to circulation`,
+        html: renderBrandedEmail({
+          title: "Reservation Returned to Circulation",
+          content: `
+            <p>Hello ${parentName || "Parent/Guardian"},</p>
 
-          <p>
-            The item has now been returned to circulation and may need to be
-            reserved again if it is still needed.
-          </p>
+            <p>
+              Your reservation for <strong>${itemName}</strong>
+              ${childName ? `for <strong>${childName}</strong>` : ""}
+              was not picked up within 7 days.
+            </p>
 
-          <p>
-            If you would still like this item, please place a new reservation
-            through the Bethesda Lending Library.
-          </p>
+            <p>
+              The item has now been returned to circulation and may need to be
+              reserved again if it is still needed.
+            </p>
 
-          <p>
-           <em>
-              Note: This is an automated reminder. If the toy has already been picked up or made arrangements with Admin,
-              please disregard this message.
-            </em>
-          </p>
+            <p>
+              If you would still like this item, please place a new reservation
+              through the Bethesda Lending Library.
+            </p>
 
-          <p>Thank you,<br />Bethesda Lending Library</p>
-        </div>
-      `,
-    });
+            <p>
+              <em>
+                Note: If pickup arrangements were already made with admin, please
+                disregard this message.
+              </em>
+            </p>
 
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("ready-pickup-expired email error:", err);
-    res.status(500).json({
-      success: false,
-      error: err.message || "Failed to send ready pickup expired email",
-    });
-  }
-});
+            <p>Thank you,<br />Bethesda Lending Library</p>
+          `,
+        }),
+      });
+
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("ready-pickup-expired email error:", err);
+      res.status(500).json({
+        error: "Failed to send ready pickup expired email",
+      });
+    }
+  });  
 
 /* ======================================================
    ROUTE: Create Reservation + Lock Inventory (NO DOUBLE BOOKING)
